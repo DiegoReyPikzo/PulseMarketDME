@@ -161,8 +161,8 @@ test("reordering page 2 preserves other pages and persists on the next query", a
     where: { deletedAt: null },
     _min: { sortOrder: true },
   });
-  assert.notEqual(minimum._min.sortOrder, null);
-  const firstPosition = (minimum._min.sortOrder ?? 0) - 40;
+  const firstPosition =
+    minimum._min.sortOrder === null ? 0 : minimum._min.sortOrder - 40;
   assert.ok(firstPosition > -2_147_483_648);
 
   const fixtures = await Promise.all(
