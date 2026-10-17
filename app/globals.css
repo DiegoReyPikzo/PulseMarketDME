@@ -739,6 +739,40 @@
   color: var(--deco-text);
 }
 
+.login-page__secondary-button {
+  border: 1px solid var(--deco-border);
+  color: var(--deco-text-muted);
+  transition:
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.login-page__secondary-button:hover {
+  border-color: var(--deco-border-strong);
+  color: var(--deco-text);
+}
+
+.login-page__identifier {
+  border: 1px solid var(--deco-border-strong);
+  background: var(--deco-surface-raised);
+}
+
+.login-page__identifier-label {
+  color: var(--deco-accent);
+}
+
+.login-page__identifier-value {
+  color: var(--deco-text);
+}
+
+.login-page__copy-feedback {
+  color: var(--deco-success);
+}
+
+.login-page__copy-feedback--error {
+  color: var(--deco-error);
+}
+
 @keyframes deco-panel-appear {
   from {
     opacity: 0;
@@ -762,7 +796,8 @@
   .dashboard-product-catalog__drag,
   .dashboard-product-catalog__move,
   .dashboard-listing__danger,
-  .login-page__provider-button {
+  .login-page__provider-button,
+  .login-page__secondary-button {
     transition: none;
   }
 
