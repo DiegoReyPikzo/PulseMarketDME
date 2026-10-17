@@ -6,6 +6,7 @@ import type { Session } from "next-auth";
 import { SignOutButton } from "./sign-out-button";
 
 const navigation = [
+  { href: "/dashboard", label: "Resumen" },
   { href: "/dashboard/products", label: "Productos" },
   { href: "/dashboard/customers", label: "Clientes" },
   { href: "/dashboard/sales", label: "Ventas" },

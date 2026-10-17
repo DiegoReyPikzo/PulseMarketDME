@@ -100,10 +100,11 @@ include local runtime and network latency and are not a server-only query plan.
 
 Authentication uses stable NextAuth.js v4 with only the GitHub OAuth provider.
 Sessions use encrypted JWT cookies, so this setup does not add auth tables to
-PostgreSQL. `/dashboard` calls `getServerSession` on the server and redirects
-unauthenticated visitors to `/login` before calling `listProducts`. The
-dashboard is a demonstration only: any GitHub account that completes sign-in
-can see the same demo product data; there are no per-user permissions or roles.
+PostgreSQL. Each protected dashboard page checks `getServerSession` on the
+server before reading dashboard data. Unauthenticated visitors are redirected
+to `/login`. The dashboard is a demonstration only: any GitHub account that
+completes sign-in can see the same demo data; there are no per-user permissions
+or roles.
 
 Set `GITHUB_ID`, `GITHUB_SECRET`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` in the
 ignored `.env` file. To append a newly generated session secret locally without
@@ -142,12 +143,12 @@ confirmed:
 
 ## Dashboard listings
 
-The authenticated `/dashboard` route redirects to `/dashboard/products`.
-Protected listings are available at `/dashboard/products`,
-`/dashboard/customers`, and `/dashboard/sales`. Each route verifies the session
-on the server before calling its existing Prisma-backed listing function.
-Filtering, sorting, pagination, and matching counts therefore execute in
-PostgreSQL; no listing loads a full table into application memory.
+The protected `/dashboard` route is the analytics summary. Protected listings
+are available at `/dashboard/products`, `/dashboard/customers`, and
+`/dashboard/sales`. Each route verifies the session on the server before
+calling its existing Prisma-backed listing function. Filtering, sorting,
+pagination, and matching counts therefore execute in PostgreSQL; no listing
+loads a full table into application memory.
 
 GET forms keep their current filters, sort, and page size in the URL. Applying
 any form starts at page 1; previous/next links preserve those criteria. Each
@@ -203,6 +204,70 @@ npm.cmd run test:mutations:integration
 The integration checks create uniquely named product fixtures in the configured
 database and remove those exact fixture IDs in `finally` cleanup. They do not
 update or delete existing catalog rows.
+
+## Dashboard summary and analytics
+
+The protected `/dashboard` route shows aggregate metrics and daily trends for
+the selected UTC date range. The range defaults to the current UTC day and the
+previous 29 days, accepts at most 366 inclusive days, and is kept in the `from`
+and `to` URL parameters. The selected final date is inclusive; database reads
+use a UTC start-inclusive/end-exclusive interval.
+
+Only `COMPLETED` sales contribute to the amount, count, average ticket, and
+daily series. `PENDING`, `CANCELLED`, and `REFUNDED` are excluded. A refunded
+sale is excluded from its original sale date in full; this is not accounting
+for refund movements or partial refunds. Historical completed sales remain
+included even if a referenced product is soft-deleted. Active products are a
+current count where `deletedAt IS NULL`, independent of the selected period.
+The summary does not assign a currency to monetary values.
+
+The totals, average, current active-product count, and daily PostgreSQL
+aggregate are read in one repeatable-read transaction. Decimal calculations
+remain exact; amounts and averages are returned as strings. Days with no
+completed sales are returned with zero amount and count. The page refreshes
+when requested, every 60 seconds while visible, and when the tab becomes
+visible again; this is periodic polling, not strict real-time data. Failed
+refreshes retain the last successful data and identify it as potentially stale.
+
+Unit tests cover UTC boundaries, parameter validation, the 366-day limit,
+zero-filled dates, and refresh policy. Analytics integration tests create their
+own customer, products, sales, and sale items, then clean up only those exact
+fixture IDs:
+
+```powershell
+npm.cmd run test:analytics:unit
+npm.cmd run test:analytics:integration
+```
+
+Measure the first query in a fresh Node process separately from 20 subsequent
+queries in that process. The benchmark reports transaction establishment, the
+combined aggregate query, transaction completion, local result processing,
+and `EXPLAIN (ANALYZE, BUFFERS)` for the same parameterized SQL. Establishment
+includes pool acquisition and any connection setup plus transaction start;
+query timings include driver/network round trips and database response. Result
+processing is local. The benchmark excludes authentication, the HTTP request,
+React rendering, and browser/network latency. A new Node process does not imply
+a cold database or cold provider compute. Explain plans and index definitions
+are collected after the timed runs and are not used to warm the reported first
+query.
+
+```powershell
+npm.cmd run db:analytics-benchmark
+```
+
+To inspect a populated seeded interval, pass a valid range explicitly:
+
+```powershell
+npm.cmd run db:analytics-benchmark -- --from=2024-01-01 --to=2024-01-30
+```
+
+The measured first query in a new Node process still exceeds the 400 ms
+target: recent default-range runs took 640.09–743.17 ms initially, while the
+20 subsequent queries had medians of 222.59–223.82 ms and maxima of
+234.07–239.99 ms. A new application process does not prove that the database
+compute or its caches were cold. The initial-query target remains open; these
+measurements do not isolate connection-pool acquisition from transaction
+startup.
 
 ## Getting Started
 

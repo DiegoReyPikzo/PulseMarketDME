@@ -15,7 +15,10 @@
     "test:integration": "node --conditions=react-server --import tsx --test tests/queries/integration.test.ts",
     "test:mutations:unit": "node --conditions=react-server --import tsx --test tests/catalog-mutations/unit.test.ts",
     "test:mutations:integration": "node --conditions=react-server --import tsx --test tests/catalog-mutations/integration.test.ts",
-    "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts"
+    "test:analytics:unit": "node --conditions=react-server --import tsx --test tests/analytics/unit.test.ts",
+    "test:analytics:integration": "node --conditions=react-server --import tsx --test tests/analytics/integration.test.ts",
+    "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts",
+    "db:analytics-benchmark": "node --conditions=react-server --import tsx scripts/benchmark-analytics.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
