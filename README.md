@@ -302,6 +302,105 @@ compute or its caches were cold. The initial-query target remains open; these
 measurements do not isolate connection-pool acquisition from transaction
 startup.
 
+## E2E database environment preparation
+
+E2E database commands must not use the ordinary development `.env`. The
+application connection is `DATABASE_URL`; Prisma migrations use `DIRECT_URL`.
+The E2E loader reads only `.env.e2e.local` (`E2E_DATABASE_URL` and
+`E2E_DIRECT_URL`) and requires a separate allowlist in
+`.env.e2e.target.local`. Copy the committed placeholder file
+`.env.e2e.target.example` to `.env.e2e.target.local`, then fill in the approved
+Neon direct host, pooled host, database name, and role. Do not put connection
+URLs or passwords in the allowlist file. Both local files are ignored by Git.
+
+The preflight validates that the two URLs use the independently approved
+Neon hosts, identify the same endpoint/database/role, and have the expected
+pooled/direct host relationship. It then connects to both approved endpoints
+with certificate verification enabled and inspects database identity, public
+tables, and prior Prisma migration rows inside read-only transactions. It
+does not apply migrations or write fixtures. A Neon project name cannot be
+verified from a connection URL; confirm the hosts and database in the Neon
+console before approving the allowlist.
+
+Run the offline configuration tests and, only after the target allowlist is
+approved and configured, the read-only preflight:
+
+```powershell
+npm.cmd run e2e:config:test
+npm.cmd run e2e:preflight
+```
+
+For a future child process, `e2e:with-env` validates the same configuration
+and overrides only that child’s `DATABASE_URL` and `DIRECT_URL` with the E2E
+connections. On Windows, `npm.cmd` is launched through npm's Node.js entry
+point and `npx.cmd` tools through their installed package CLI entry points.
+Other `.cmd` scripts are rejected rather than passed through a shell. It does
+not mutate the current development server environment.
+For example, after a separate E2E build is prepared:
+
+```powershell
+npm.cmd run e2e:with-env -- npm.cmd run start
+```
+
+Do not run the existing integration test scripts for E2E preparation: they
+load the ordinary development `.env` and use its application database
+connection.
+
+## E2E browser authentication
+
+The local browser suites use Playwright with Chromium and an OAuth 2.0 provider
+simulator on loopback. Run configuration/authentication tests with:
+
+```powershell
+npm.cmd run e2e:config:test
+npm.cmd run e2e:auth
+```
+
+Run product-creation browser tests with:
+
+```powershell
+npm.cmd run e2e:products
+```
+
+Run product drag-and-drop browser tests with:
+
+```powershell
+npm.cmd run e2e:reorder
+```
+
+The runner validates the explicit E2E environment and completes the
+read-only database preflight before starting either test service. It starts
+the OAuth simulator on an ephemeral loopback port and a dedicated Next.js
+development server at `127.0.0.1:4317` using `.next-e2e`; it does not reuse an
+existing server and closes both services when the run ends. The E2E provider
+is accepted only when the E2E URLs match the independent approved target,
+the database environment is the validated E2E environment, all endpoints are
+loopback, and per-run random OAuth and NextAuth secrets are present. It is
+rejected in production. Normal application startup continues to configure
+GitHub only.
+
+The simulated provider exercises NextAuth's regular OAuth authorization-code
+callback, state validation, and JWT session issuance. Its local approval and
+denial screens do not contact GitHub. Passing this suite does **not** certify
+the real GitHub OAuth exchange. Real GitHub OAuth needs a separately approved
+test application and account and is not covered here.
+
+The browser tests cover unauthenticated redirects, successful simulated
+OAuth, generic accessible failure after provider denial, and sign-out
+protection after reload. Playwright reporters are list-only; trace, screenshots,
+video, cookies and storage-state output are disabled or ignored. The suite
+covers product creation, zero-price persistence, duplicate SKU rejection and
+server-side decimal validation. Product runs use unique SKUs, record created
+product IDs under the ignored `.playwright-e2e` directory, and remove only those
+IDs in the runner's finalization block. A second cleanup lookup is restricted
+to the run's exact unique SKUs. The runner then repeats the read-only preflight.
+The drag-and-drop suite creates three run-unique products through the form,
+selects the unfiltered custom-position ascending catalog, uses Playwright's
+pointer-driven `dragTo` interaction on the real drag handle, and verifies the
+complete fixture order in the UI after reload and in PostgreSQL. It cleans only
+the IDs/SKUs from that run. This covers browser HTML5 drag-and-drop through a
+real pointer interaction, not the Subir/Bajar buttons.
+
 ## Getting Started
 
 First, run the development server:
