@@ -142,11 +142,16 @@ GitHub's stable account ID is the numeric `id` field from
 intended account; never authorize by username.
 
 An authenticated but unapproved Google account is denied a session and access
-to protected pages and actions. After that denial, the login page offers a
-one-use link to show only that browser's verified Google `sub` (the
-`providerAccountId`) for an access request. The server transports the identity
-in a short-lived encrypted, HttpOnly cookie scoped to that one-use endpoint;
-the endpoint consumes it and returns no-store plain text. It does not create a
+to protected pages and actions. After that denial, the login page links to
+`/login/request-access`, a card that shows only that browser's verified Google
+`sub` (the `providerAccountId`) so the user can copy it into an access request.
+The server transports the identity in a short-lived (120 s) encrypted, HttpOnly,
+`SameSite=Strict` cookie scoped to `/api/auth/google-account-id`. The card
+retrieves it with a same-origin `POST` to that endpoint, which returns no-store
+JSON and clears the cookie in the browser; `GET` is not accepted, and requests
+without a matching `Origin` (or with a non-same-origin `Sec-Fetch-Site`) are
+rejected before the cookie is read or cleared. The token has no server-side
+revocation: it expires after 120 seconds. The endpoint does not create a
 session, authorize the account, use URL parameters for identity, or log the
 identifier. Add the exact `provider: "google"` and `providerAccountId` pair
 manually to `PULSEMARKET_AUTHORIZED_ACCOUNTS` only after approving the request.
@@ -250,6 +255,13 @@ to the nearest integer. Any result below zero or outside the database field
 range is rejected. Bulk operations run in a Prisma transaction, and product
 rows are never physically deleted by these actions.
 
+Each price or stock adjustment is written only while the product still has the
+value read when the adjustment was computed. If another change (for example an
+individual edit) commits between that read and the write, the batch reports
+that the catalog changed and the whole transaction is rolled back; no product
+in the batch is adjusted. Bulk category changes set an explicit value and are
+not conditioned on the previous category.
+
 Run the mutation checks with:
 
 ```powershell
@@ -288,6 +300,50 @@ Run the creation checks with:
 npm.cmd run test:product-creation:unit
 npm.cmd run test:product-creation:integration
 ```
+
+### Editing catalog products
+
+Each product row on `/dashboard/products` has an “Editar” action that opens a
+modal dialog. SKU, name, description, category, price, and stock can be
+edited; `id`, `sortOrder`, `deletedAt`, timestamps, and `seedKey` cannot, and
+submitting any of them is rejected. Both the lookup and the update Server
+Actions verify the authorized session on the server before reading or writing.
+Server Action IDs are not a security boundary: they appear in client bundles
+and requests can be replayed, so every action performs its own authorization.
+
+New values follow the creation rules (trimmed SKU/name/category, blank
+description stored as `NULL`, required category, two-decimal price, and
+non-negative `Int` stock). A legacy product without a category must have one
+entered before it can be saved. SKU uniqueness applies to all product rows,
+including soft-deleted ones. Changing a SKU releases the previous SKU, which
+another product can then use. Missing and soft-deleted products cannot be
+edited.
+
+The dialog submits the values it loaded alongside the new values. Those
+original values are untrusted browser input used only to detect conflicts.
+Only fields that actually changed are written, in one conditional update that
+requires each changed field to still hold its original value. A concurrent
+change to a field the user did not edit is kept; a concurrent change to an
+edited field is reported as a conflict with an option to reload the product.
+Equivalent values (for example `10` and `10.00`) are not a change. Saving
+revalidates the product listing only; edits do not affect dashboard
+analytics, which use stored sale totals and the active-product count.
+
+Run the edit checks with:
+
+```powershell
+npm.cmd run test:product-update:unit
+npm.cmd run test:product-update:integration
+npm.cmd run e2e:product-edit
+```
+
+The integration checks cover both concurrency orders deterministically by
+committing one operation from another connection between the other's read and
+write. The E2E suite covers editing, invalid values, duplicate SKUs, a product
+deleted from another tab, Escape/Cancel/Enter behavior, duplicate submission
+while saving, and HTTP replays without an authorized session. Those replays
+are rejected by `proxy.ts` before reaching the action; the action's own
+authorization is covered by direct handler unit tests.
 
 Unit tests mock persistence and action dependencies. Integration tests use
 PostgreSQL, create unique fixture products, and clean up only those fixture
@@ -423,6 +479,17 @@ Run product drag-and-drop browser tests with:
 ```powershell
 npm.cmd run e2e:reorder
 ```
+
+Run product edit browser tests with:
+
+```powershell
+npm.cmd run e2e:product-edit
+```
+
+Each product suite uses one exact set of run-unique fixture SKUs (`ZERO`,
+`DUP`, `INVALID`; `DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`,
+`EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
+and the IDs the suite registered.
 
 The runner validates the explicit E2E environment and completes the
 read-only database preflight before starting either test service. It starts

@@ -189,22 +189,25 @@ async function main(): Promise<void> {
   const googleDenialSuite = process.argv
     .slice(2)
     .includes("--google-denial");
+  const productEditSuite = process.argv.slice(2).includes("--product-edit");
   if (
     Number(productSuite) +
       Number(reorderSuite) +
-      Number(googleDenialSuite) >
+      Number(googleDenialSuite) +
+      Number(productEditSuite) >
     1
   ) {
     throw new Error("Choose one E2E suite per runner invocation.");
   }
-  const productFixtureSuite = productSuite || reorderSuite;
+  const productFixtureSuite = productSuite || reorderSuite || productEditSuite;
   const runnerArguments = process.argv
     .slice(2)
     .filter(
       (argument) =>
         argument !== "--products" &&
         argument !== "--reorder" &&
-        argument !== "--google-denial",
+        argument !== "--google-denial" &&
+        argument !== "--product-edit",
     );
   const baseEnvironment: NodeJS.ProcessEnv = {
     ...createE2eChildEnvironment(configuration),
@@ -227,7 +230,14 @@ async function main(): Promise<void> {
         `PME2E-${productRunId}-DRAG-2`,
         `PME2E-${productRunId}-DRAG-3`,
       ]
-    : [
+    : productEditSuite
+      ? [
+          `PME2E-${productRunId}-EDIT-A`,
+          `PME2E-${productRunId}-EDIT-B`,
+          `PME2E-${productRunId}-EDIT-C`,
+          `PME2E-${productRunId}-EDIT-R`,
+        ]
+      : [
         `PME2E-${productRunId}-ZERO`,
         `PME2E-${productRunId}-DUP`,
         `PME2E-${productRunId}-INVALID`,
@@ -289,7 +299,9 @@ async function main(): Promise<void> {
           ? "tests/e2e/browser/product-creation.spec.ts"
           : reorderSuite
             ? "tests/e2e/browser/product-reorder.spec.ts"
-            : googleDenialSuite
+            : productEditSuite
+              ? "tests/e2e/browser/product-edit.spec.ts"
+              : googleDenialSuite
               ? "tests/e2e/browser/google-access-request.spec.ts"
               : "tests/e2e/browser/auth.spec.ts",
         "--config=playwright.config.ts",

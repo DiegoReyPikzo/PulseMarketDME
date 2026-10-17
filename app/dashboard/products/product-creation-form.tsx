@@ -9,8 +9,7 @@ import type {
   CreateProductField,
 } from "../../../lib/product-creation-action";
 import { createProductAction } from "./actions";
-
-type ProductFormValues = Record<CreateProductField, string>;
+import { ProductFields, type ProductFormValues } from "./product-fields";
 
 const initialValues: ProductFormValues = {
   sku: "",
@@ -46,41 +45,6 @@ export function ProductCreationForm() {
     });
   }
 
-  function fieldInput(
-    field: CreateProductField,
-    input: {
-      autoComplete?: string;
-      inputMode?: "decimal" | "numeric" | "text";
-      maxLength?: number;
-      required?: boolean;
-      type?: "text";
-    } = {},
-  ) {
-    const errorId = `${field}-error`;
-    return (
-      <>
-        <input
-          aria-describedby={fieldErrors[field] ? errorId : undefined}
-          aria-invalid={Boolean(fieldErrors[field])}
-          autoComplete={input.autoComplete}
-          className="dashboard-listing__control mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
-          inputMode={input.inputMode}
-          maxLength={input.maxLength}
-          name={field}
-          onChange={(event) => updateField(field, event.currentTarget.value)}
-          required={input.required}
-          type={input.type ?? "text"}
-          value={values[field]}
-        />
-        {fieldErrors[field] ? (
-          <span className="dashboard-listing__field-error mt-1 block text-xs" id={errorId}>
-            {fieldErrors[field]}
-          </span>
-        ) : null}
-      </>
-    );
-  }
-
   return (
     <section
       aria-labelledby="product-creation-heading"
@@ -93,33 +57,12 @@ export function ProductCreationForm() {
         Crear producto
       </h2>
       <form className="dashboard-product-form__grid mt-4 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>
-        <label className="dashboard-listing__label block text-xs font-medium">
-          SKU
-          {fieldInput("sku", { maxLength: 64, required: true })}
-        </label>
-        <label className="dashboard-listing__label block text-xs font-medium">
-          Nombre
-          {fieldInput("name", { maxLength: 160, required: true })}
-        </label>
-        <label className="dashboard-listing__label block text-xs font-medium">
-          Categoría
-          {fieldInput("category", { maxLength: 100, required: true })}
-        </label>
-        <label className="dashboard-listing__label block text-xs font-medium">
-          Precio
-          {fieldInput("price", {
-            inputMode: "decimal",
-            required: true,
-          })}
-        </label>
-        <label className="dashboard-listing__label block text-xs font-medium">
-          Stock
-          {fieldInput("stock", { inputMode: "numeric" })}
-        </label>
-        <label className="dashboard-listing__label block text-xs font-medium sm:col-span-2 xl:col-span-3">
-          Descripción (opcional)
-          {fieldInput("description")}
-        </label>
+        <ProductFields
+          descriptionClassName="sm:col-span-2 xl:col-span-3"
+          fieldErrors={fieldErrors}
+          onChange={updateField}
+          values={values}
+        />
         <div className="flex flex-wrap items-center gap-4 sm:col-span-2 xl:col-span-3">
           <button
             className="dashboard-listing__apply min-h-10 rounded-md px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"

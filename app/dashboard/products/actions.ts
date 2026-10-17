@@ -24,6 +24,17 @@ import {
   handleCreateProductAction,
   type CreateProductActionState,
 } from "../../../lib/product-creation-action";
+import {
+  createProductUpdateRepository,
+  findProductForEdit,
+  updateProduct,
+} from "../../../lib/product-update";
+import {
+  handleGetProductForEditAction,
+  handleUpdateProductAction,
+  type GetProductForEditActionState,
+  type UpdateProductActionState,
+} from "../../../lib/product-update-action";
 
 export type ProductMutationActionState =
   | { status: "success"; message: string }
@@ -39,6 +50,28 @@ export async function createProductAction(
         (transaction) =>
           createProduct(createProductCreationRepository(transaction), input),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    revalidate: () => revalidatePath("/dashboard/products"),
+  });
+}
+
+export async function getProductForEditAction(
+  formData: FormData,
+): Promise<GetProductForEditActionState> {
+  return handleGetProductForEditAction(formData, {
+    requireSession: getAuthenticatedSession,
+    find: (id) => findProductForEdit(createProductUpdateRepository(prisma), id),
+  });
+}
+
+export async function updateProductAction(
+  formData: FormData,
+): Promise<UpdateProductActionState> {
+  return handleUpdateProductAction(formData, {
+    requireSession: getAuthenticatedSession,
+    update: (input) =>
+      prisma.$transaction((transaction) =>
+        updateProduct(createProductUpdateRepository(transaction), input),
       ),
     revalidate: () => revalidatePath("/dashboard/products"),
   });
