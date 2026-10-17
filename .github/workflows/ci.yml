@@ -134,4 +134,5 @@ jobs:
       - name: Build production application
         run: npm run build
         env:
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.E2E_DIRECT_URL }}
