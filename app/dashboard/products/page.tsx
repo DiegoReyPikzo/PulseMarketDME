@@ -12,6 +12,7 @@ import { productListInputSchema } from "../../../lib/queries/inputs";
 import { listProducts } from "../../../lib/queries/products";
 import { DashboardShell } from "../dashboard-shell";
 import { ProductCatalogTable } from "./product-catalog-table";
+import { ProductCreationForm } from "./product-creation-form";
 import {
   ListingForm,
   SearchControl,
@@ -33,6 +34,7 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
   if (!parsed.success) {
     return (
       <DashboardShell session={session} activePath="/dashboard/products">
+        <ProductCreationForm />
         <ListingHeading
           description="Consulta el catálogo activo con filtros y orden en la base de datos."
           title="Productos"
@@ -68,6 +70,7 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
 
   return (
     <DashboardShell session={session} activePath="/dashboard/products">
+      <ProductCreationForm />
       <ListingHeading
         description="Consulta el catálogo activo con filtros y orden en la base de datos."
         title="Productos"

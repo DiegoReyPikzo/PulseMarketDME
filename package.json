@@ -17,6 +17,8 @@
     "test:mutations:integration": "node --conditions=react-server --import tsx --test tests/catalog-mutations/integration.test.ts",
     "test:analytics:unit": "node --conditions=react-server --import tsx --test tests/analytics/unit.test.ts",
     "test:analytics:integration": "node --conditions=react-server --import tsx --test tests/analytics/integration.test.ts",
+    "test:product-creation:unit": "node --conditions=react-server --import tsx --test tests/product-creation/unit.test.ts",
+    "test:product-creation:integration": "node --conditions=react-server --import tsx --test tests/product-creation/integration.test.ts",
     "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts",
     "db:analytics-benchmark": "node --conditions=react-server --import tsx scripts/benchmark-analytics.ts"
   },

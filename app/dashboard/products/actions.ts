@@ -16,10 +16,33 @@ import {
 import { getAuthenticatedSession } from "../../../lib/auth-session";
 import { prisma } from "../../../lib/prisma";
 import { Prisma } from "../../../generated/prisma/client";
+import {
+  createProduct,
+  createProductCreationRepository,
+} from "../../../lib/product-creation";
+import {
+  handleCreateProductAction,
+  type CreateProductActionState,
+} from "../../../lib/product-creation-action";
 
 export type ProductMutationActionState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
+
+export async function createProductAction(
+  formData: FormData,
+): Promise<CreateProductActionState> {
+  return handleCreateProductAction(formData, {
+    requireSession: getAuthenticatedSession,
+    create: (input) =>
+      prisma.$transaction(
+        (transaction) =>
+          createProduct(createProductCreationRepository(transaction), input),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    revalidate: () => revalidatePath("/dashboard/products"),
+  });
+}
 
 export async function softDeleteProductAction(
   formData: FormData,

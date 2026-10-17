@@ -205,6 +205,39 @@ The integration checks create uniquely named product fixtures in the configured
 database and remove those exact fixture IDs in `finally` cleanup. They do not
 update or delete existing catalog rows.
 
+### Creating catalog products
+
+The protected `/dashboard/products` page includes a product creation form.
+SKU, name, category, and price are required; outer whitespace is removed from
+SKU, name, and category. Description is optional and blank/whitespace-only
+values are stored as `NULL`. Price is validated as a decimal string with up to
+two fractional digits and within `Decimal(12,2)`; stock defaults to zero and
+must fit a non-negative PostgreSQL `Int`. The action rejects internal model
+fields, authenticates before validation, and creates products inside a
+serializable transaction.
+
+SKU uniqueness applies to all product rows, including soft-deleted products,
+so a retired SKU cannot be reused. The next sort position is assigned after
+the current maximum active position (or zero when no active products exist);
+existing positions are not changed. A serialization conflict asks the user to
+retry. The submit control is disabled while pending and the SKU unique
+constraint protects duplicate submissions; there is no persistent idempotency
+token. A successful create revalidates and refreshes the current listing
+without changing its filters, sort, or page, so the new product may not appear
+in the current view.
+
+Run the creation checks with:
+
+```powershell
+npm.cmd run test:product-creation:unit
+npm.cmd run test:product-creation:integration
+```
+
+Unit tests mock persistence and action dependencies. Integration tests use
+PostgreSQL, create unique fixture products, and clean up only those fixture
+IDs. The serialization-conflict action test simulates Prisma `P2034`; it does
+not claim to exercise real concurrent transactions.
+
 ## Dashboard summary and analytics
 
 The protected `/dashboard` route shows aggregate metrics and daily trends for
