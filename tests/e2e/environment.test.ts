@@ -9,9 +9,17 @@ import {
 import { resolveE2eCommandInvocation } from "../../lib/e2e-command";
 import {
   E2E_AUTH_PROVIDER_ID,
-  getAuthProviderSelection,
   getE2eAuthConfiguration,
 } from "../../lib/e2e-auth-config";
+import { getLoginProviderConfiguration } from "../../lib/auth-provider-config";
+import {
+  isAuthorizedProviderIdentity,
+} from "../../lib/auth-authorization";
+import {
+  isListedProviderIdentity,
+  isProxyProviderIdentityAllowed,
+  parseAuthorizedAccounts,
+} from "../../lib/authorized-accounts";
 
 const e2eConnections = {
   E2E_DATABASE_URL:
@@ -229,12 +237,30 @@ function validE2eAuthEnvironment(): Record<string, string> {
   };
 }
 
-test("uses only GitHub during normal startup", () => {
-  assert.deepEqual(getAuthProviderSelection({}), {
-    id: "github",
-    label: "Continuar con GitHub",
-    description: "Inicia sesión con tu cuenta de GitHub.",
+test("shows both normal providers when configured", () => {
+  const configuration = getLoginProviderConfiguration({
+    GITHUB_ID: "github-id",
+    GITHUB_SECRET: "github-secret",
+    GOOGLE_CLIENT_ID: "google-id",
+    GOOGLE_CLIENT_SECRET: "google-secret",
+    NEXTAUTH_SECRET: "session-secret",
+    NEXTAUTH_URL: "https://pulsemarket.example",
   });
+  assert.deepEqual(
+    configuration.providers.map(({ id }) => id),
+    ["github", "google"],
+  );
+  assert.equal(configuration.error, null);
+});
+
+test("reports incomplete OAuth configuration without rendering a provider", () => {
+  const configuration = getLoginProviderConfiguration({
+    GITHUB_ID: "github-id",
+    NEXTAUTH_SECRET: "session-secret",
+    NEXTAUTH_URL: "https://pulsemarket.example",
+  });
+  assert.deepEqual(configuration.providers, []);
+  assert.match(configuration.error ?? "", /GITHUB_ID, GITHUB_SECRET/);
 });
 
 test("rejects an E2E activation flag without validated target and ephemeral credentials", () => {
@@ -277,10 +303,114 @@ test("rejects E2E provider URLs that are not loopback HTTP", () => {
 });
 
 test("enables the local OAuth provider only with validated target and ephemeral secrets", () => {
-  const configuration = getE2eAuthConfiguration(validE2eAuthEnvironment());
+  const environment = validE2eAuthEnvironment();
+  const configuration = getE2eAuthConfiguration(environment);
   assert.ok(configuration);
   assert.equal(
-    getAuthProviderSelection(validE2eAuthEnvironment()).id,
+    getLoginProviderConfiguration(environment).providers[0]?.id,
     E2E_AUTH_PROVIDER_ID,
+  );
+  assert.equal(
+    isAuthorizedProviderIdentity(
+      {
+        provider: E2E_AUTH_PROVIDER_ID,
+        providerAccountId: environment.PULSEMARKET_E2E_RUN_ID,
+        e2eRunId: environment.PULSEMARKET_E2E_RUN_ID,
+      },
+      environment,
+    ),
+    true,
+  );
+  assert.equal(
+    isAuthorizedProviderIdentity(
+      {
+        provider: E2E_AUTH_PROVIDER_ID,
+        providerAccountId: "other-run",
+        e2eRunId: environment.PULSEMARKET_E2E_RUN_ID,
+      },
+      environment,
+    ),
+    false,
+  );
+});
+
+test("lists no normal provider for an incomplete local OAuth activation", () => {
+  const configuration = getLoginProviderConfiguration({
+    NODE_ENV: "development",
+    PULSEMARKET_E2E_RUN_ID: "r".repeat(43),
+  });
+  assert.deepEqual(configuration.providers, []);
+  assert.equal(configuration.error, "La configuración de autenticación no está completa.");
+});
+
+test("authorizes only exact provider and provider account ID pairs", () => {
+  const authorized = JSON.stringify([
+    { provider: "github", providerAccountId: "12345" },
+  ]);
+  assert.equal(isListedProviderIdentity("github", "12345", authorized), true);
+  assert.equal(isListedProviderIdentity("google", "12345", authorized), false);
+  assert.equal(isListedProviderIdentity("github", "other", authorized), false);
+  assert.equal(isListedProviderIdentity("github", undefined, authorized), false);
+});
+
+test("closes access for missing, empty, malformed, duplicate, or invalid account lists", () => {
+  assert.equal(parseAuthorizedAccounts(undefined), null);
+  assert.deepEqual(parseAuthorizedAccounts("[]"), []);
+  assert.equal(parseAuthorizedAccounts("not-json"), null);
+  assert.equal(
+    parseAuthorizedAccounts(
+      JSON.stringify([
+        { provider: "github", providerAccountId: "1" },
+        { provider: "github", providerAccountId: "1" },
+      ]),
+    ),
+    null,
+  );
+  assert.equal(
+    parseAuthorizedAccounts(
+      JSON.stringify([{ provider: "github", providerAccountId: " 1 " }]),
+    ),
+    null,
+  );
+  assert.equal(
+    isListedProviderIdentity("github", "1", "[]"),
+    false,
+  );
+});
+
+test("proxy accepts only an exact allowlisted account and rejects stale E2E identities", () => {
+  const environment = {
+    NODE_ENV: "development",
+    PULSEMARKET_AUTHORIZED_ACCOUNTS: JSON.stringify([
+      { provider: "google", providerAccountId: "stable-sub" },
+    ]),
+    PULSEMARKET_E2E_RUN_ID: "r".repeat(43),
+  };
+  assert.equal(
+    isProxyProviderIdentityAllowed(
+      "google",
+      "stable-sub",
+      undefined,
+      environment,
+    ),
+    true,
+  );
+  assert.equal(
+    isProxyProviderIdentityAllowed(
+      "local-oauth",
+      "r".repeat(43),
+      "different-run",
+      environment,
+    ),
+    false,
+  );
+  assert.equal(
+    isProxyProviderIdentityAllowed(
+      "local-oauth",
+      "r".repeat(43),
+      "r".repeat(43),
+      { ...environment, NODE_ENV: "production" },
+    ),
+    false,
   );
 });

@@ -113,22 +113,3 @@ export function getE2eAuthConfiguration(
     nextAuthUrl,
   };
 }
-
-export function getAuthProviderSelection(
-  environment: Readonly<Record<string, string | undefined>>,
-): { id: string; label: string; description: string } {
-  if (getE2eAuthConfiguration(environment)) {
-    return {
-      id: E2E_AUTH_PROVIDER_ID,
-      label: "Continuar con OAuth simulado",
-      description:
-        "Usa un proveedor OAuth simulado local; no inicia sesión en GitHub.",
-    };
-  }
-
-  return {
-    id: "github",
-    label: "Continuar con GitHub",
-    description: "Inicia sesión con tu cuenta de GitHub.",
-  };
-}

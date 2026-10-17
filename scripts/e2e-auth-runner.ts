@@ -237,6 +237,7 @@ async function main(): Promise<void> {
       clientId,
       clientSecret,
       callbackUrl: `${APP_ORIGIN}/api/auth/callback/local-oauth`,
+      subject: runId,
     });
 
     const serverEnvironment: NodeJS.ProcessEnv = {
@@ -280,6 +281,7 @@ async function main(): Promise<void> {
     const playwrightEnvironment: NodeJS.ProcessEnv = {
       ...createE2eChildEnvironment(configuration),
       PULSEMARKET_E2E_BASE_URL: APP_ORIGIN,
+      PULSEMARKET_E2E_DISCLOSURE_TEST_SECRET: nextAuthSecret,
       PULSEMARKET_E2E_PRODUCT_SKUS: JSON.stringify(productSkus),
       PULSEMARKET_E2E_PRODUCT_REGISTRY: productRegistry,
     };

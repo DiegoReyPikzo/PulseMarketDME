@@ -10,6 +10,7 @@ type SimulatorOptions = {
   clientId: string;
   clientSecret: string;
   callbackUrl: string;
+  subject: string;
 };
 
 type SimulatorHandle = {
@@ -202,7 +203,7 @@ export async function startE2eOAuthProvider(
       authorizationCodes.delete(code);
       const accessToken = randomBytes(32).toString("base64url");
       accessTokens.set(accessToken, {
-        sub: "local-e2e-user",
+        sub: options.subject,
         name: "E2E Test User",
         email: "e2e-user@example.test",
       });

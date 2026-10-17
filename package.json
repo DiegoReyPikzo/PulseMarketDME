@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "test:unit": "node --conditions=react-server --import tsx --test tests/queries/unit.test.ts",
     "test:dashboard": "node --conditions=react-server --import tsx --test tests/dashboard/list-params.test.ts",
-    "test:auth": "node --conditions=react-server --import tsx --test tests/auth/session.test.ts",
+    "test:auth": "node --conditions=react-server --import tsx --test tests/auth/authorization.test.ts tests/auth/google-account-disclosure.test.ts tests/auth/session.test.ts",
     "test:integration": "node --conditions=react-server --import tsx --test tests/queries/integration.test.ts",
     "test:mutations:unit": "node --conditions=react-server --import tsx --test tests/catalog-mutations/unit.test.ts",
     "test:mutations:integration": "node --conditions=react-server --import tsx --test tests/catalog-mutations/integration.test.ts",
@@ -59,5 +60,8 @@
     "prisma@7.10.1": true,
     "@prisma/engines@7.10.1": true,
     "esbuild@0.28.2": true
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

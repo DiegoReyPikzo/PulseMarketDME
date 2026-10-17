@@ -12,3 +12,14 @@ export function requireAuthenticatedSession(
 
   return session;
 }
+
+export function requireAuthorizedSession(
+  session: Session | null,
+  isAuthorized: (session: Session) => boolean,
+  unauthenticated: () => never,
+  unauthorized: () => never,
+): Session {
+  if (!session) return unauthenticated();
+  if (!isAuthorized(session)) return unauthorized();
+  return session;
+}

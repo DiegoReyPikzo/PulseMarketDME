@@ -10,6 +10,7 @@ const simulatorPromise = startE2eOAuthProvider({
   callbackUrl,
   clientId,
   clientSecret,
+  subject: "test-run-subject",
 });
 
 after(async () => {
@@ -72,7 +73,7 @@ test("serves an approval page and completes a one-time OAuth code exchange", asy
   });
   assert.equal(profile.status, 200);
   assert.deepEqual(await profile.json(), {
-    sub: "local-e2e-user",
+    sub: "test-run-subject",
     name: "E2E Test User",
     email: "e2e-user@example.test",
   });

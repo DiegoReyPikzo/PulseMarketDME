@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { encode } from "next-auth/jwt";
+
+const GOOGLE_ACCOUNT_DISCLOSURE_COOKIE =
+  "pulsemarket-google-account-disclosure";
+const GOOGLE_ACCOUNT_DISCLOSURE_PATH = "/api/auth/google-account-id";
 
 test.afterEach(async ({ page }) => {
   if (!page.isClosed()) {
@@ -24,6 +29,89 @@ test("redirects an unauthenticated dashboard request to login", async ({
   await expect(
     page.getByRole("button", { name: "Continuar con OAuth simulado" }),
   ).toBeVisible();
+});
+
+test("denies an unapproved Google session and accepts no browser-supplied identity", async ({
+  page,
+}) => {
+  const secret = process.env.PULSEMARKET_E2E_DISCLOSURE_TEST_SECRET;
+  if (!secret) throw new Error("Missing E2E disclosure test secret.");
+  const sessionToken = await encode({
+    token: {
+      sub: "unapproved-google-user",
+      provider: "google",
+      providerAccountId: "unapproved-google-user",
+    },
+    secret,
+  });
+  await page.context().addCookies([
+    {
+      name: "next-auth.session-token",
+      value: sessionToken,
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: true,
+      secure: false,
+      sameSite: "Lax",
+    },
+  ]);
+
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login\?error=AccessDenied$/);
+  await expect(
+    page.getByRole("link", {
+      name: "Consultar mi identificador Google para solicitar acceso",
+    }),
+  ).toBeVisible();
+
+  const directRequest = await page.goto(
+    `${GOOGLE_ACCOUNT_DISCLOSURE_PATH}?providerAccountId=someone-else`,
+  );
+  expect(directRequest?.status()).toBe(404);
+  await expect(page.locator("body")).toHaveText(
+    "No hay un identificador Google disponible.",
+  );
+});
+
+test("discloses only the encrypted cookie identity once without creating a session", async ({
+  page,
+}) => {
+  const secret = process.env.PULSEMARKET_E2E_DISCLOSURE_TEST_SECRET;
+  if (!secret) throw new Error("Missing E2E disclosure test secret.");
+  const providerAccountId = "e2e-google-account-subject";
+  const token = await encode({
+    token: {
+      purpose: "google-account-disclosure",
+      provider: "google",
+      providerAccountId,
+    },
+    secret,
+    salt: "pulsemarket-google-account-disclosure-v1",
+    maxAge: 120,
+  });
+  await page.context().addCookies([
+    {
+      name: GOOGLE_ACCOUNT_DISCLOSURE_COOKIE,
+      value: token,
+      domain: "127.0.0.1",
+      path: GOOGLE_ACCOUNT_DISCLOSURE_PATH,
+      httpOnly: true,
+      secure: false,
+      sameSite: "Strict",
+    },
+  ]);
+
+  const disclosureResponse = await page.goto(GOOGLE_ACCOUNT_DISCLOSURE_PATH);
+  expect(disclosureResponse?.status()).toBe(200);
+  await expect(page.locator("body")).toHaveText(providerAccountId);
+  await expect(page).toHaveURL(
+    new RegExp(`${GOOGLE_ACCOUNT_DISCLOSURE_PATH}$`),
+  );
+
+  const replayResponse = await page.goto(GOOGLE_ACCOUNT_DISCLOSURE_PATH);
+  expect(replayResponse?.status()).toBe(404);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login(?:\?.*)?$/);
 });
 
 test("renders a generic login error without reflecting arbitrary provider text", async ({

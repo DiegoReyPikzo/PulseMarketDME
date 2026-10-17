@@ -96,32 +96,88 @@ maximum for those 20 samples. The p95 uses the nearest-rank method:
 `sorted[ceil(0.95 * n) - 1]` (the 19th ordered sample for 20 runs). Results
 include local runtime and network latency and are not a server-only query plan.
 
-## GitHub authentication
+## Authentication and authorization
 
-Authentication uses stable NextAuth.js v4 with only the GitHub OAuth provider.
-Sessions use encrypted JWT cookies, so this setup does not add auth tables to
-PostgreSQL. Each protected dashboard page checks `getServerSession` on the
-server before reading dashboard data. Unauthenticated visitors are redirected
-to `/login`. The dashboard is a demonstration only: any GitHub account that
-completes sign-in can see the same demo data; there are no per-user permissions
-or roles.
+Authentication uses NextAuth.js v4 with GitHub and Google OAuth. Sessions use
+encrypted JWT cookies. Dashboard routes are checked by `proxy.ts` and again by
+server-side page and Server Action guards. Authorization is based only on the
+exact provider and stable provider account ID pair. Display names, usernames,
+and email addresses do not grant access. The authorized-account list is
+server-only; missing, empty, invalid, or duplicate entries deny access.
 
-Set `GITHUB_ID`, `GITHUB_SECRET`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` in the
-ignored `.env` file. To append a newly generated session secret locally without
-printing it to the terminal, run this PowerShell command once, then fill the
-GitHub OAuth values in `.env`:
+Configure `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and
+`PULSEMARKET_AUTHORIZED_ACCOUNTS` in the ignored `.env` file for local
+development and in the appropriate Vercel environment. Either complete OAuth
+provider pair can be enabled; a half-configured pair is an error. The account
+list is JSON with exact stable identities, for example:
+
+```json
+[{"provider":"github","providerAccountId":"<stable numeric GitHub account ID>"}]
+```
+
+Supported provider values are `github` and `google`. An empty array denies all
+accounts. Never use a `NEXT_PUBLIC_` prefix or expose the list to the browser.
+To append a newly generated session secret locally without printing it to the
+terminal, run this PowerShell command once, then fill the OAuth values in
+`.env`:
 
 ```powershell
 node -e "process.stdout.write('NEXTAUTH_SECRET=' + require('node:crypto').randomBytes(32).toString('base64url') + '\n')" | Add-Content -Path .env
 ```
 
-For local development, set `NEXTAUTH_URL` to `http://localhost:3000`.
-Register a GitHub OAuth App named `PulseMarket Local Development` with
-homepage `http://localhost:3000` and callback
-`http://localhost:3000/api/auth/callback/github`. The callback path is
-NextAuth.js v4's default GitHub OAuth callback for the `/api/auth/[...nextauth]`
-Route Handler. Do not reuse these local URLs as production settings; configure
-the actual deployment origin separately when one exists.
+For local development, set `NEXTAUTH_URL` to `http://localhost:3000`. Register
+OAuth clients with these callback URLs:
+
+- GitHub local: `http://localhost:3000/api/auth/callback/github`
+- Google local: `http://localhost:3000/api/auth/callback/google`
+- GitHub production: `https://<production-domain>/api/auth/callback/github`
+- Google production: `https://<production-domain>/api/auth/callback/google`
+
+Use the real production origin for `NEXTAUTH_URL` and the production redirect
+URIs; do not substitute Preview or local URLs.
+
+GitHub's stable account ID is the numeric `id` field from
+`https://api.github.com/users/<github-username>`. Verify that it belongs to the
+intended account; never authorize by username.
+
+An authenticated but unapproved Google account is denied a session and access
+to protected pages and actions. After that denial, the login page offers a
+one-use link to show only that browser's verified Google `sub` (the
+`providerAccountId`) for an access request. The server transports the identity
+in a short-lived encrypted, HttpOnly cookie scoped to that one-use endpoint;
+the endpoint consumes it and returns no-store plain text. It does not create a
+session, authorize the account, use URL parameters for identity, or log the
+identifier. Add the exact `provider: "google"` and `providerAccountId` pair
+manually to `PULSEMARKET_AUTHORIZED_ACCOUNTS` only after approving the request.
+
+Add the evaluator's provider and stable account ID to Production's
+`PULSEMARKET_AUTHORIZED_ACCOUNTS` before delivery. Preview is closed by
+default: do not copy Production credentials, authorization entries, or
+database connections into Preview. Keep Preview deployments disabled or
+protected until they have their own non-production database branch and
+independent environment configuration. Use an empty authorization list there
+until Preview access is explicitly approved.
+
+The local OAuth simulator exists only for the isolated E2E runner. It requires
+validated E2E database targeting and ephemeral loopback OAuth credentials and
+is rejected in production. Do not configure simulator or E2E variables in
+Vercel.
+
+## Production builds and migrations
+
+Use Node.js 24 (`.nvmrc` and `engines.node`); it meets the installed Next.js and
+Prisma runtime requirements. `npm run build` generates the Prisma client
+before `next build`. Generation needs `DIRECT_URL` to be configured, but does
+not apply migrations. Development migrations use `npm run db:migrate`;
+production migration deployment is a separate, explicit operation:
+
+```powershell
+npm.cmd run db:migrate:deploy
+```
+
+Before running it, confirm the selected environment's Neon direct connection
+and migration status. Do not run the production command as part of the build.
 
 The session-guard unit tests are separate from the query tests:
 

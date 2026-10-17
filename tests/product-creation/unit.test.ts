@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { Prisma } from "../../generated/prisma/client";
+import type { Session } from "next-auth";
+import { isAuthorizedProviderIdentity } from "../../lib/auth-authorization";
+import { requireAuthorizedSession } from "../../lib/require-authenticated-session";
 import {
   createProduct,
   createProductInputSchema,
@@ -65,12 +68,35 @@ function formData(
   return form;
 }
 
-test("requires a session before validating or attempting a write", async () => {
+test("rejects an unauthorized action before validating or attempting a write", async () => {
   let writes = 0;
+  const unauthorisedSession: Session = {
+    expires: "2026-10-18T00:00:00.000Z",
+    user: {
+      provider: "google",
+      providerAccountId: "unapproved-google-account",
+    },
+  };
   await assert.rejects(
     handleCreateProductAction(formData({ unexpected: "value" }), {
       async requireSession() {
-        throw new Error("Unauthenticated");
+        return requireAuthorizedSession(
+          unauthorisedSession,
+          (session) =>
+            isAuthorizedProviderIdentity(
+              {
+                provider: session.user?.provider ?? "",
+                providerAccountId: session.user?.providerAccountId ?? "",
+              },
+              { PULSEMARKET_AUTHORIZED_ACCOUNTS: "[]" },
+            ),
+          () => {
+            throw new Error("Unauthenticated");
+          },
+          () => {
+            throw new Error("AccessDenied");
+          },
+        );
       },
       async create() {
         writes += 1;
@@ -78,7 +104,7 @@ test("requires a session before validating or attempting a write", async () => {
       },
       revalidate() {},
     }),
-    /Unauthenticated/,
+    /AccessDenied/,
   );
   assert.equal(writes, 0);
 });
