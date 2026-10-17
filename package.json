@@ -13,6 +13,8 @@
     "test:dashboard": "node --conditions=react-server --import tsx --test tests/dashboard/list-params.test.ts",
     "test:auth": "node --conditions=react-server --import tsx --test tests/auth/session.test.ts",
     "test:integration": "node --conditions=react-server --import tsx --test tests/queries/integration.test.ts",
+    "test:mutations:unit": "node --conditions=react-server --import tsx --test tests/catalog-mutations/unit.test.ts",
+    "test:mutations:integration": "node --conditions=react-server --import tsx --test tests/catalog-mutations/integration.test.ts",
     "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts"
   },
   "dependencies": {

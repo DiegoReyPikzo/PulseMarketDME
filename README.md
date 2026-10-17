@@ -163,6 +163,29 @@ Sales and product prices are shown as stored decimal strings without assigning
 a currency. Sales rows include the existing related customer summary and do
 not fetch sale items.
 
+## Product catalog mutations
+
+Authenticated users can soft-delete a product or apply a bulk catalog change
+from `/dashboard/products`. Bulk operations accept 1–50 distinct product IDs
+and reject missing or already deleted products. Category changes require a
+non-empty category. Stock and price adjustments use signed deltas: positive
+values increase and negative values decrease the selected field. Price results
+are rounded to two decimal places; percentage-based stock results are rounded
+to the nearest integer. Any result below zero or outside the database field
+range is rejected. Bulk operations run in a Prisma transaction, and product
+rows are never physically deleted by these actions.
+
+Run the mutation checks with:
+
+```powershell
+npm.cmd run test:mutations:unit
+npm.cmd run test:mutations:integration
+```
+
+The integration checks create uniquely named product fixtures in the configured
+database and remove those exact fixture IDs in `finally` cleanup. They do not
+update or delete existing catalog rows.
+
 ## Getting Started
 
 First, run the development server:

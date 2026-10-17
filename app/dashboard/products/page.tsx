@@ -11,6 +11,7 @@ import {
 import { productListInputSchema } from "../../../lib/queries/inputs";
 import { listProducts } from "../../../lib/queries/products";
 import { DashboardShell } from "../dashboard-shell";
+import { ProductCatalogTable } from "./product-catalog-table";
 import {
   ListingForm,
   SearchControl,
@@ -18,7 +19,6 @@ import {
   TextFilter,
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
-import { ListingTable, TableCell } from "../listing-table";
 
 type ProductsPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -67,29 +67,10 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
         title="Productos"
       />
       <ProductFilters values={input} />
-      <ListingTable
-        caption="Resultados de productos"
-        columns={[
-          { label: "SKU" },
-          { label: "Producto" },
-          { label: "Categoría" },
-          { label: "Precio", numeric: true },
-          { label: "Stock", numeric: true },
-        ]}
-        empty={result.items.length === 0}
-      >
-        {result.items.map((product) => (
-          <tr className="hover:bg-slate-900/50" key={product.id}>
-            <TableCell mono>{product.sku}</TableCell>
-            <TableCell>{product.name}</TableCell>
-            <TableCell>{product.category ?? "—"}</TableCell>
-            <TableCell mono numeric>
-              {product.price}
-            </TableCell>
-            <TableCell numeric>{product.stock}</TableCell>
-          </tr>
-        ))}
-      </ListingTable>
+      <ProductCatalogTable
+        key={result.items.map(({ id }) => id).join("|")}
+        products={result.items}
+      />
       <ListingPagination
         page={input.page}
         pageSize={input.pageSize}
