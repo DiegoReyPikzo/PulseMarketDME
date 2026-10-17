@@ -43,6 +43,59 @@ The seed creates 100 products, 500 customers, 2,000 sales, and 8,000 sale
 items (10,600 records total). Its fixed IDs and unique seed keys make repeated
 runs safe; it inserts only these records and never deletes existing data.
 
+## Server-side list queries
+
+The server-only functions `listProducts`, `listCustomers`, and `listSales`
+are available from `lib/queries/products.ts`, `lib/queries/customers.ts`, and
+`lib/queries/sales.ts`. Each accepts an unknown input object, validates it with
+Zod, and returns `items`, `total`, `page`, `pageSize`, and `totalPages`.
+Defaults are page 1 and 20 rows; page sizes must be between 1 and 100.
+Invalid and unknown parameters throw Zod validation errors. Database errors
+are not converted into empty results.
+
+Supported filters:
+
+- Products: case-insensitive `search` across name, SKU, and description;
+  exact `category`. Soft-deleted products are excluded.
+- Customers: case-insensitive `search` across name, email, and phone.
+- Sales: case-insensitive `search` against the related customer's name/email;
+  exact `customerId` and `status`; inclusive ISO `from`/`to` sale-date bounds.
+
+Sorting uses `sortBy` and `sortOrder` (`asc` or `desc`): products allow
+`name`, `sku`, `price`, or `createdAt`; customers allow `name`, `email`, or
+`createdAt`; sales allow `saleDate`, `total`, or `createdAt`. Every ordering
+adds `id ASC` as a unique tie-breaker. Sales select the customer summary only,
+not sale items. Monetary Decimal values are serialized as fixed two-decimal
+strings and dates as ISO strings. These uncached functions execute database
+page queries and matching counts.
+
+Unit tests exercise parsing, query construction, pagination, stable sorting,
+and serialization without connecting to or changing Neon:
+
+```powershell
+npm.cmd run test:unit
+```
+
+Read-only integration tests query the configured database and do not create,
+update, or delete records:
+
+```powershell
+npm.cmd run test:integration
+```
+
+Measure each full listing (including its count) against the configured Neon
+connection with:
+
+```powershell
+npm.cmd run db:benchmark
+```
+
+The benchmark reports the first execution separately, then measures 20 more
+executions per listing at page size 20. It reports minimum, median, p95, and
+maximum for those 20 samples. The p95 uses the nearest-rank method:
+`sorted[ceil(0.95 * n) - 1]` (the 19th ordered sample for 20 runs). Results
+include local runtime and network latency and are not a server-only query plan.
+
 ## Getting Started
 
 First, run the development server:
