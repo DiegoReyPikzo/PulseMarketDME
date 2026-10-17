@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -190,7 +191,37 @@ test("resolves Windows npx Prisma to its installed Node entry point without chan
   });
 
   assert.equal(invocation.command, "C:\\Program Files\\nodejs\\node.exe");
-  assert.ok(invocation.args[0]?.endsWith("\\prisma\\build\\index.js"));
+  assert.ok(invocation.args[0]);
+  assert.equal(existsSync(invocation.args[0]), true);
+  assert.deepEqual(
+    invocation.args[0].split(/[\\/]/).slice(-3),
+    ["prisma", "build", "index.js"],
+  );
+  assert.deepEqual(invocation.args.slice(1), args.slice(1));
+});
+
+test("resolves Linux npx Prisma to its installed Node entry point without changing arguments", () => {
+  const args = [
+    "prisma",
+    "migrate",
+    "deploy",
+    "--schema",
+    "schemas/e2e schema.prisma",
+    "--message",
+    "safe ; & $(not-executed)",
+  ];
+  const invocation = resolveE2eCommandInvocation("npx", args, {
+    platform: "linux",
+    nodePath: "/usr/bin/node",
+  });
+
+  assert.equal(invocation.command, "/usr/bin/node");
+  assert.ok(invocation.args[0]);
+  assert.equal(existsSync(invocation.args[0]), true);
+  assert.deepEqual(
+    invocation.args[0].split(/[\\/]/).slice(-3),
+    ["prisma", "build", "index.js"],
+  );
   assert.deepEqual(invocation.args.slice(1), args.slice(1));
 });
 
