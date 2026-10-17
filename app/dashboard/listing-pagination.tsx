@@ -31,17 +31,17 @@ export function ListingPagination({
   return (
     <nav
       aria-label="Paginación"
-      className="flex flex-wrap items-center justify-between gap-4 text-sm"
+      className="dashboard-listing__pagination flex flex-wrap items-center justify-between gap-4 text-sm"
     >
-      <p aria-live="polite" className="text-slate-400">
-        Página <span className="font-medium text-slate-100">{page}</span>
+      <p aria-live="polite" className="dashboard-listing__pagination-copy">
+        Página <span className="font-medium">{page}</span>
         {totalPages > 0 ? ` de ${totalPages}` : ""} ·{" "}
-        <span className="font-medium text-slate-100">{total}</span> coincidencias
+        <span className="font-medium">{total}</span> coincidencias
       </p>
       <div className="flex gap-2">
         {page > 1 ? (
           <Link
-            className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-cyan-400 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="dashboard-listing__page-link rounded-md border px-3 py-2"
             href={previousHref}
             rel="prev"
           >
@@ -50,14 +50,14 @@ export function ListingPagination({
         ) : (
           <span
             aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-slate-800 px-3 py-2 text-slate-600"
+            className="dashboard-listing__page-link dashboard-listing__page-link--disabled cursor-not-allowed rounded-md border px-3 py-2"
           >
             Anterior
           </span>
         )}
         {page < totalPages ? (
           <Link
-            className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-cyan-400 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="dashboard-listing__page-link rounded-md border px-3 py-2"
             href={nextHref}
             rel="next"
           >
@@ -66,7 +66,7 @@ export function ListingPagination({
         ) : (
           <span
             aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-slate-800 px-3 py-2 text-slate-600"
+            className="dashboard-listing__page-link dashboard-listing__page-link--disabled cursor-not-allowed rounded-md border px-3 py-2"
           >
             Siguiente
           </span>

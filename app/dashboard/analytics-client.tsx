@@ -88,14 +88,17 @@ export function DashboardAnalyticsClient({
   const isRefreshing = updating || pending;
 
   return (
-    <section aria-label="Analítica del período" className="space-y-6">
+    <section
+      aria-label="Analítica del período"
+      className="dashboard-analytics space-y-6"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-400">
+          <p className="dashboard-summary__meta text-sm">
             Actualización automática cada 60 segundos mientras esta pestaña esté
             visible.
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="dashboard-summary__subtle mt-1 text-xs">
             Última consulta exitosa:{" "}
             <time dateTime={data.queriedAt}>
               {formatLastQueryTime(data.queriedAt, browserTimeZone).text}
@@ -105,7 +108,7 @@ export function DashboardAnalyticsClient({
           </p>
         </div>
         <button
-          className="min-h-10 rounded-md border border-slate-700 px-4 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 disabled:opacity-50"
+          className="dashboard-summary__secondary-button min-h-10 rounded-md px-4 text-sm font-medium disabled:opacity-50"
           disabled={isRefreshing}
           onClick={refresh}
           type="button"
@@ -117,7 +120,7 @@ export function DashboardAnalyticsClient({
       {staleMessage ? (
         <p
           aria-live="polite"
-          className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200"
+          className="dashboard-summary__error rounded-lg p-3 text-sm"
           role="alert"
         >
           {staleMessage} Se conserva la última consulta exitosa.
@@ -150,6 +153,7 @@ export function DashboardAnalyticsClient({
       <div className="grid gap-5 xl:grid-cols-2">
         <DailySvgChart
           title="Importe diario"
+          series="amount"
           points={data.daily.map((point) => ({
             date: point.date,
             value: point.amount,
@@ -158,6 +162,7 @@ export function DashboardAnalyticsClient({
         />
         <DailySvgChart
           title="Ventas completadas por día"
+          series="count"
           points={data.daily.map((point) => ({
             date: point.date,
             value: String(point.salesCount),
@@ -166,12 +171,12 @@ export function DashboardAnalyticsClient({
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0e151d]">
-        <table className="w-full min-w-[480px] text-left text-sm">
-          <caption className="px-4 py-3 text-left font-medium text-slate-200">
+      <div className="dashboard-summary__table-scroll overflow-x-auto rounded-xl">
+        <table className="dashboard-summary__table w-full min-w-[480px] text-left text-sm">
+          <caption className="dashboard-summary__table-caption px-4 py-3 text-left font-medium">
             Tendencia diaria exacta (UTC)
           </caption>
-          <thead className="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
+          <thead className="text-xs uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 font-medium" scope="col">Fecha (UTC)</th>
               <th className="px-4 py-3 text-right font-medium" scope="col">
@@ -182,14 +187,14 @@ export function DashboardAnalyticsClient({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">
+          <tbody className="divide-y">
             {data.daily.map((point) => (
               <tr key={point.date}>
-                <td className="px-4 py-3 text-slate-300">{point.date}</td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-200">
+                <td className="px-4 py-3">{point.date}</td>
+                <td className="dashboard-summary__table-numeric px-4 py-3 text-right font-mono tabular-nums">
                   {point.amount}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums text-slate-200">
+                <td className="dashboard-summary__table-numeric px-4 py-3 text-right tabular-nums">
                   {point.salesCount}
                 </td>
               </tr>
@@ -211,12 +216,12 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <article className="rounded-xl border border-slate-800 bg-[#0e151d] p-5">
-      <h2 className="text-sm font-medium text-slate-400">{label}</h2>
-      <p className="mt-3 break-all font-mono text-2xl font-semibold tabular-nums text-slate-100">
+    <article className="dashboard-summary__metric rounded-xl p-5">
+      <h2 className="dashboard-summary__metric-label text-sm font-medium">{label}</h2>
+      <p className="dashboard-summary__value mt-3 break-all font-mono text-2xl font-semibold tabular-nums">
         {value}
       </p>
-      <p className="mt-2 text-xs text-slate-500">{detail}</p>
+      <p className="dashboard-summary__detail mt-2 text-xs">{detail}</p>
     </article>
   );
 }
@@ -230,9 +235,11 @@ type ChartPoint = {
 function DailySvgChart({
   title,
   points,
+  series,
 }: {
   title: string;
   points: readonly ChartPoint[];
+  series: "amount" | "count";
 }) {
   const width = 800;
   const height = 220;
@@ -262,8 +269,10 @@ function DailySvgChart({
       : `${points.length} días entre ${points[0].date} y ${points[points.length - 1].date}.`;
 
   return (
-    <figure className="min-w-0 rounded-xl border border-slate-800 bg-[#0e151d] p-4">
-      <figcaption className="mb-3 font-medium text-slate-200">{title}</figcaption>
+    <figure className="dashboard-summary__chart min-w-0 rounded-xl p-4">
+      <figcaption className="dashboard-summary__chart-title mb-3 font-medium">
+        {title}
+      </figcaption>
       <svg
         aria-label={`${title}. ${chartDescription}`}
         className="h-auto w-full"
@@ -273,7 +282,7 @@ function DailySvgChart({
         <title>{title}</title>
         <desc>{chartDescription}</desc>
         <line
-          stroke="#334155"
+          stroke="var(--deco-border)"
           strokeWidth="1"
           x1={padding}
           x2={width - padding}
@@ -281,31 +290,51 @@ function DailySvgChart({
           y2={height - padding}
         />
         {coordinates.length > 1 ? (
-          <path d={path} fill="none" stroke="#22d3ee" strokeWidth="3" />
+          <path
+            d={path}
+            fill="none"
+            stroke={series === "amount" ? "var(--deco-accent)" : "var(--deco-text-muted)"}
+            strokeDasharray={series === "count" ? "8 5" : undefined}
+            strokeWidth="3"
+          />
         ) : null}
-        {coordinates.map(({ x, y }, index) => (
-          <circle
-            cx={x}
-            cy={y}
-            fill="#22d3ee"
-            key={points[index].date}
-            r="4"
-          >
-            <title>
-              {formatChartPointTitle(
-                points[index].date,
-                points[index].exactLabel,
-              )}
-            </title>
-          </circle>
-        ))}
+        {coordinates.map(({ x, y }, index) => {
+          const titleText = formatChartPointTitle(
+            points[index].date,
+            points[index].exactLabel,
+          );
+          const fill =
+            series === "amount" ? "var(--deco-accent)" : "var(--deco-text-muted)";
+
+          return series === "amount" ? (
+            <circle cx={x} cy={y} fill={fill} key={points[index].date} r="4">
+              <title>{titleText}</title>
+            </circle>
+          ) : (
+            <rect
+              fill={fill}
+              height="8"
+              key={points[index].date}
+              width="8"
+              x={x - 4}
+              y={y - 4}
+            >
+              <title>{titleText}</title>
+            </rect>
+          );
+        })}
         {points.length > 0 ? (
           <>
-            <text fill="#94a3b8" fontSize="12" x={padding} y={height - 5}>
+            <text
+              fill="var(--deco-text-muted)"
+              fontSize="12"
+              x={padding}
+              y={height - 5}
+            >
               {points[0].date}
             </text>
             <text
-              fill="#94a3b8"
+              fill="var(--deco-text-muted)"
               fontSize="12"
               textAnchor="end"
               x={width - padding}

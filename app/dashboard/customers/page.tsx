@@ -16,6 +16,7 @@ import {
   SelectFilter,
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
+import { WingedPiggybank } from "../../components/loading/winged-piggybank";
 import { ListingTable, TableCell } from "../listing-table";
 
 type CustomersPageProps = {
@@ -66,7 +67,7 @@ async function CustomersListing({ searchParams }: CustomersPageProps) {
         empty={result.items.length === 0}
       >
         {result.items.map((customer) => (
-          <tr className="hover:bg-slate-900/50" key={customer.id}>
+          <tr className="dashboard-listing__row" key={customer.id}>
             <TableCell>{customer.name}</TableCell>
             <TableCell>{customer.email}</TableCell>
             <TableCell>{customer.phone ?? "—"}</TableCell>
@@ -141,14 +142,14 @@ function CustomerFilters({
 
 function Heading() {
   return (
-    <header className="mb-6 space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+    <header className="dashboard-page-heading mb-6 space-y-2">
+      <p className="dashboard-page-heading__eyebrow text-xs font-semibold uppercase">
         Directorio
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
+      <h1 className="dashboard-page-heading__title text-3xl tracking-tight">
         Clientes
       </h1>
-      <p className="text-sm text-slate-400">
+      <p className="dashboard-page-heading__copy text-sm">
         Busca y ordena clientes por sus datos registrados.
       </p>
     </header>
@@ -158,7 +159,7 @@ function Heading() {
 function InvalidParams({ message }: { message: string }) {
   return (
     <div
-      className="my-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200"
+      className="dashboard-listing__feedback dashboard-listing__feedback--warning my-5 rounded-lg p-4 text-sm"
       role="alert"
     >
       <p className="font-medium">No se pudieron aplicar los parámetros.</p>
@@ -179,7 +180,11 @@ function stringValue(value: string | string[] | undefined): string {
 
 export default function CustomersPage({ searchParams }: CustomersPageProps) {
   return (
-    <Suspense fallback={<p className="p-8 text-slate-400">Cargando clientes...</p>}>
+    <Suspense
+      fallback={
+        <WingedPiggybank layout="page" message="Preparando tus clientes..." />
+      }
+    >
       <CustomersListing searchParams={searchParams} />
     </Suspense>
   );

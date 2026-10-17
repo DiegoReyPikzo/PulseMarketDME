@@ -6,6 +6,7 @@ import { parseDashboardAnalyticsRange } from "../../lib/analytics/range";
 import { getAuthenticatedSession } from "../../lib/auth-session";
 import type { DashboardSearchParams } from "../../lib/dashboard/list-params";
 import { DashboardShell } from "./dashboard-shell";
+import { WingedPiggybank } from "../components/loading/winged-piggybank";
 import { DashboardAnalyticsClient } from "./analytics-client";
 
 type DashboardPageProps = {
@@ -29,7 +30,7 @@ async function DashboardSummary({ searchParams }: DashboardPageProps) {
         <SummaryHeading />
         <DateRangeForm from={defaults.data.from} to={defaults.data.to} />
         <p
-          className="mt-4 rounded-lg border border-amber-700 bg-amber-950/40 p-4 text-sm text-amber-200"
+          className="dashboard-summary__error mt-4 rounded-lg p-4 text-sm"
           role="alert"
         >
           Período inválido: {parsed.message}
@@ -44,9 +45,11 @@ async function DashboardSummary({ searchParams }: DashboardPageProps) {
     <DashboardShell session={session} activePath="/dashboard">
       <SummaryHeading />
       <DateRangeForm from={parsed.data.from} to={parsed.data.to} />
-      <div className="my-6 border-t border-slate-800" />
-      <DashboardAnalyticsClient initialData={analytics} />
-      <p className="mt-6 text-xs leading-5 text-slate-500">
+      <div className="dashboard-summary__rule my-6 border-t" />
+      <div className="dashboard-summary__analytics">
+        <DashboardAnalyticsClient initialData={analytics} />
+      </div>
+      <p className="dashboard-summary__subtle mt-6 text-xs leading-5">
         Solo las ventas con estado COMPLETED cuentan en las métricas del
         período. Las ventas REFUNDED se excluyen por completo; este resumen no
         constituye contabilidad de movimientos de reembolso. Los productos
@@ -59,14 +62,14 @@ async function DashboardSummary({ searchParams }: DashboardPageProps) {
 
 function SummaryHeading() {
   return (
-    <header className="mb-6 space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+    <header className="dashboard-summary__intro mb-6 space-y-2">
+    <p className="dashboard-summary__eyebrow text-xs font-semibold uppercase">
         Analítica
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
+    <h1 className="dashboard-summary__title text-3xl tracking-tight">
         Resumen
       </h1>
-      <p className="text-sm text-slate-400">
+    <p className="dashboard-summary__copy text-sm">
         Ventas completadas y estado actual del catálogo.
       </p>
     </header>
@@ -77,13 +80,13 @@ function DateRangeForm({ from, to }: { from: string; to: string }) {
   return (
     <form
       action="/dashboard"
-      className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-[#0e151d] p-4 sm:flex-row sm:items-end"
+      className="dashboard-summary__filters flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-end"
       method="get"
     >
       <label className="block text-xs font-medium text-slate-400">
         Desde (UTC)
         <input
-          className="mt-1 min-h-10 w-full rounded-md border border-slate-700 bg-[#0b1117] px-3 text-sm text-slate-100 outline-none focus-visible:border-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+          className="mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
           defaultValue={from}
           name="from"
           required
@@ -93,7 +96,7 @@ function DateRangeForm({ from, to }: { from: string; to: string }) {
       <label className="block text-xs font-medium text-slate-400">
         Hasta (UTC, inclusive)
         <input
-          className="mt-1 min-h-10 w-full rounded-md border border-slate-700 bg-[#0b1117] px-3 text-sm text-slate-100 outline-none focus-visible:border-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+          className="mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
           defaultValue={to}
           name="to"
           required
@@ -101,7 +104,7 @@ function DateRangeForm({ from, to }: { from: string; to: string }) {
         />
       </label>
       <button
-        className="min-h-10 rounded-md bg-cyan-400 px-4 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+        className="dashboard-summary__button min-h-10 rounded-md px-4 text-sm font-semibold"
         type="submit"
       >
         Aplicar período
@@ -112,7 +115,11 @@ function DateRangeForm({ from, to }: { from: string; to: string }) {
 
 export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
-    <Suspense fallback={<p className="p-8 text-slate-400">Cargando resumen...</p>}>
+    <Suspense
+      fallback={
+        <WingedPiggybank layout="page" message="Preparando tu resumen..." />
+      }
+    >
       <DashboardSummary searchParams={searchParams} />
     </Suspense>
   );

@@ -17,7 +17,7 @@ async function LoginError({
   return (
     <p
       aria-live="polite"
-      className="max-w-md rounded-lg border border-rose-800 bg-rose-950/40 p-3 text-sm text-rose-300"
+      className="login-page__error max-w-md rounded-lg p-3 text-sm"
       role="alert"
     >
       No se pudo completar el inicio de sesión. Inténtalo de nuevo.
@@ -29,18 +29,28 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
   const provider = getAuthProviderSelection(process.env);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold">Acceso a PulseMarket</h1>
-        <p className="text-zinc-600 dark:text-zinc-400">{provider.description}</p>
-      </div>
-      <Suspense fallback={null}>
-        <LoginError searchParams={searchParams} />
-      </Suspense>
-      <OAuthSignInButton label={provider.label} providerId={provider.id} />
-      <Link className="text-sm underline underline-offset-4" href="/">
-        Volver al inicio
-      </Link>
+    <main className="login-page flex min-h-screen flex-col items-center justify-center px-6 py-10 text-center">
+      <section
+        aria-labelledby="login-heading"
+        className="login-page__card flex w-full max-w-md flex-col items-center gap-6 rounded-xl p-6 sm:p-8"
+      >
+        <div className="space-y-2">
+          <p aria-hidden="true" className="login-page__ornament">
+            ◆
+          </p>
+          <h1 className="login-page__title text-3xl" id="login-heading">
+            Acceso a PulseMarket
+          </h1>
+          <p className="login-page__copy text-sm">{provider.description}</p>
+        </div>
+        <Suspense fallback={null}>
+          <LoginError searchParams={searchParams} />
+        </Suspense>
+        <OAuthSignInButton label={provider.label} providerId={provider.id} />
+        <Link className="login-page__back text-sm underline underline-offset-4" href="/">
+          Volver al inicio
+        </Link>
+      </section>
     </main>
   );
 }

@@ -24,20 +24,19 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   return (
-    <div className="min-h-screen bg-[#0b1117] font-sans text-slate-100">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-slate-800 bg-[#0e151d] px-5 py-6 lg:flex">
-        <Link className="text-xl font-semibold tracking-tight" href="/dashboard">
-          Pulse<span className="text-cyan-400">Market</span>
+    <div className="dashboard-shell font-sans">
+      <aside className="dashboard-shell__sidebar fixed inset-y-0 left-0 hidden w-64 flex-col border-r px-5 py-6 lg:flex">
+        <Link className="dashboard-brand text-xl font-semibold" href="/dashboard">
+          Pulse<span>Market</span>
         </Link>
-        <nav aria-label="Navegación principal" className="mt-10 space-y-1">
+        <nav
+          aria-label="Navegación principal"
+          className="dashboard-shell__nav mt-10 space-y-1"
+        >
           {navigation.map((item) => (
             <Link
               aria-current={activePath === item.href ? "page" : undefined}
-              className={`block rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
-                activePath === item.href
-                  ? "bg-cyan-400/10 font-medium text-cyan-300"
-                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
-              }`}
+              className="dashboard-nav-link block rounded-lg px-3 py-2.5 text-sm"
               href={item.href}
               key={item.href}
             >
@@ -49,22 +48,21 @@ export function DashboardShell({
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-4 border-b border-slate-800 bg-[#0b1117]/95 px-4 backdrop-blur sm:px-8">
-          <Link className="font-semibold lg:hidden" href="/dashboard">
-            Pulse<span className="text-cyan-400">Market</span>
+        <header className="dashboard-shell__header sticky top-0 z-10 flex min-h-16 flex-wrap items-center justify-between gap-x-4 border-b px-4 py-2 backdrop-blur sm:px-8">
+          <Link
+            className="dashboard-brand order-1 font-semibold lg:hidden"
+            href="/dashboard"
+          >
+            Pulse<span>Market</span>
           </Link>
           <nav
             aria-label="Navegación principal"
-            className="flex items-center gap-1 overflow-x-auto lg:hidden"
+            className="dashboard-shell__nav dashboard-shell__mobile-nav order-3 -mx-4 flex w-[calc(100%+2rem)] items-center gap-1 overflow-x-auto px-4 pb-1 lg:hidden"
           >
             {navigation.map((item) => (
               <Link
                 aria-current={activePath === item.href ? "page" : undefined}
-                className={`whitespace-nowrap rounded-md px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
-                  activePath === item.href
-                    ? "text-cyan-300"
-                    : "text-slate-400 hover:text-slate-100"
-                }`}
+                className="dashboard-nav-link whitespace-nowrap rounded-md px-3 py-2 text-sm"
                 href={item.href}
                 key={item.href}
               >
@@ -72,14 +70,16 @@ export function DashboardShell({
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="order-2 ml-auto flex items-center gap-3">
             <span className="hidden max-w-48 truncate text-sm text-slate-300 sm:block">
               {session.user?.name ?? "Cuenta de GitHub"}
             </span>
             <SignOutButton />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl p-4 sm:p-8">{children}</main>
+        <main className="dashboard-shell__main mx-auto w-full max-w-7xl p-4 sm:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -116,7 +116,7 @@ function UserIdentity({
           {session.user?.name ?? "Cuenta de GitHub"}
         </p>
         {session.user?.email ? (
-          <p className="truncate text-xs text-slate-500">
+          <p className="dashboard-shell__identity-detail truncate text-xs">
             {session.user.email}
           </p>
         ) : null}

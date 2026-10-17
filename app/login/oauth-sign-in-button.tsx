@@ -11,7 +11,7 @@ export function OAuthSignInButton({
 }) {
   return (
     <button
-      className="rounded-lg bg-zinc-900 px-5 py-3 font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+      className="login-page__provider-button min-h-12 w-full rounded-lg px-5 py-3 font-medium"
       onClick={() => void signIn(providerId, { callbackUrl: "/dashboard" })}
       type="button"
     >

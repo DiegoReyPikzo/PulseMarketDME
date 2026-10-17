@@ -20,6 +20,7 @@ import {
   TextFilter,
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
+import { WingedPiggybank } from "../../components/loading/winged-piggybank";
 
 type ProductsPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -77,7 +78,7 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
       />
       <ProductFilters values={input} />
       {input.sortBy === "sortOrder" && !allowReorder ? (
-        <p className="mt-3 text-sm text-amber-300" role="status">
+        <p className="dashboard-listing__warning mt-3 text-sm" role="status">
           Para reordenar, quita los filtros, elige orden ascendente y usa un
           tamaño de página de hasta 50 productos.
         </p>
@@ -139,14 +140,14 @@ function ListingHeading({
   description: string;
 }) {
   return (
-    <header className="mb-6 space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+    <header className="dashboard-page-heading mb-6 space-y-2">
+      <p className="dashboard-page-heading__eyebrow text-xs font-semibold uppercase">
         Catálogo y operaciones
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
+      <h1 className="dashboard-page-heading__title text-3xl tracking-tight">
         {title}
       </h1>
-      <p className="text-sm text-slate-400">{description}</p>
+      <p className="dashboard-page-heading__copy text-sm">{description}</p>
     </header>
   );
 }
@@ -199,7 +200,7 @@ function PageSizeControl({ value }: { value: string }) {
 function InvalidParams({ message }: { message: string }) {
   return (
     <div
-      className="my-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200"
+      className="dashboard-listing__feedback dashboard-listing__feedback--warning my-5 rounded-lg p-4 text-sm"
       role="alert"
     >
       <p className="font-medium">No se pudieron aplicar los parámetros.</p>
@@ -220,7 +221,11 @@ function stringValue(value: string | number | undefined, fallback = ""): string 
 
 export default function ProductsPage({ searchParams }: ProductsPageProps) {
   return (
-    <Suspense fallback={<p className="p-8 text-slate-400">Cargando productos...</p>}>
+    <Suspense
+      fallback={
+        <WingedPiggybank layout="page" message="Preparando tu catálogo..." />
+      }
+    >
       <ProductsListing searchParams={searchParams} />
     </Suspense>
   );

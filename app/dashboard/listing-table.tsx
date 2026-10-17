@@ -17,10 +17,10 @@ export function ListingTable({
   empty: boolean;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0e151d]">
-      <table className="w-full min-w-[680px] text-left text-sm">
+    <div className="dashboard-listing__table-scroll min-w-0 max-w-full overflow-x-auto rounded-xl">
+      <table className="dashboard-listing__table w-full min-w-[680px] text-left text-sm">
         <caption className="sr-only">{caption}</caption>
-        <thead className="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
+        <thead className="text-xs uppercase tracking-wide">
           <tr>
             {columns.map((column) => (
               <th
@@ -33,11 +33,11 @@ export function ListingTable({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800">
+        <tbody className="divide-y">
           {empty ? (
             <tr>
               <td
-                className="px-4 py-12 text-center text-slate-400"
+                className="dashboard-listing__empty px-4 py-12 text-center"
                 colSpan={columns.length}
               >
                 No se encontraron resultados con estos criterios.
@@ -63,7 +63,7 @@ export function TableCell({
 }) {
   return (
     <td
-      className={`px-4 py-3.5 text-slate-200 ${numeric ? "text-right tabular-nums" : ""} ${mono ? "font-mono text-xs" : ""}`}
+      className={`dashboard-listing__cell px-4 py-3.5 ${numeric ? "text-right tabular-nums" : ""} ${mono ? "font-mono text-xs" : ""}`}
     >
       {children}
     </td>

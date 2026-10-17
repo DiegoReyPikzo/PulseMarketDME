@@ -6,7 +6,7 @@ export type SelectOption = {
 };
 
 const controlClass =
-  "mt-1 min-h-10 w-full rounded-md border border-slate-700 bg-[#0b1117] px-3 text-sm text-slate-100 outline-none focus-visible:border-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-400/40";
+  "dashboard-listing__control mt-1 min-h-10 w-full rounded-md border px-3 text-sm";
 
 export function ListingForm({
   action,
@@ -18,12 +18,12 @@ export function ListingForm({
   return (
     <form
       action={action}
-      className="grid grid-cols-1 items-end gap-4 rounded-xl border border-slate-800 bg-[#0e151d] p-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="dashboard-listing__filters grid min-w-0 grid-cols-1 items-end gap-4 rounded-xl p-4 sm:grid-cols-2 xl:grid-cols-4"
       method="get"
     >
       {children}
       <button
-        className="min-h-10 rounded-md bg-cyan-400 px-4 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+        className="dashboard-listing__apply min-h-10 rounded-md px-4 text-sm font-semibold"
         type="submit"
       >
         Aplicar

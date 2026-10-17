@@ -18,6 +18,7 @@ import {
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
 import { ListingTable, TableCell } from "../listing-table";
+import { WingedPiggybank } from "../../components/loading/winged-piggybank";
 
 type SalesPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -72,7 +73,7 @@ async function SalesListing({ searchParams }: SalesPageProps) {
         empty={result.items.length === 0}
       >
         {result.items.map((sale) => (
-          <tr className="hover:bg-slate-900/50" key={sale.id}>
+          <tr className="dashboard-listing__row" key={sale.id}>
             <TableCell mono>
               {new Date(sale.saleDate).toLocaleString("es")}
             </TableCell>
@@ -116,7 +117,7 @@ function SalesFilters({
       <label className="block text-xs font-medium text-slate-400">
         Cliente (ID)
         <input
-          className="mt-1 min-h-10 w-full rounded-md border border-slate-700 bg-[#0b1117] px-3 text-sm text-slate-100 outline-none focus-visible:border-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+          className="dashboard-listing__control mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
           defaultValue={stringValue(params.customerId)}
           name="customerId"
           placeholder="UUID del cliente"
@@ -180,14 +181,14 @@ function SalesFilters({
 
 function Heading() {
   return (
-    <header className="mb-6 space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+    <header className="dashboard-page-heading mb-6 space-y-2">
+      <p className="dashboard-page-heading__eyebrow text-xs font-semibold uppercase">
         Transacciones
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
+      <h1 className="dashboard-page-heading__title text-3xl tracking-tight">
         Ventas
       </h1>
-      <p className="text-sm text-slate-400">
+      <p className="dashboard-page-heading__copy text-sm">
         Filtra ventas y revisa el cliente y total registrados.
       </p>
     </header>
@@ -197,7 +198,7 @@ function Heading() {
 function InvalidParams({ message }: { message: string }) {
   return (
     <div
-      className="my-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200"
+      className="dashboard-listing__feedback dashboard-listing__feedback--warning my-5 rounded-lg p-4 text-sm"
       role="alert"
     >
       <p className="font-medium">No se pudieron aplicar los parámetros.</p>
@@ -222,7 +223,11 @@ function dateValue(value: string | string[] | undefined): string {
 
 export default function SalesPage({ searchParams }: SalesPageProps) {
   return (
-    <Suspense fallback={<p className="p-8 text-slate-400">Cargando ventas...</p>}>
+    <Suspense
+      fallback={
+        <WingedPiggybank layout="page" message="Preparando tus ventas..." />
+      }
+    >
       <SalesListing searchParams={searchParams} />
     </Suspense>
   );
