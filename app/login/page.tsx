@@ -25,15 +25,18 @@ async function LoginError({
         No se pudo completar el inicio de sesión. Inténtalo de nuevo.
       </p>
       {canRequestGoogleAccess ? (
-        // Full navigation to a plain-text route handler; <Link> prefetch/RSC
-        // fetches could hit the route, which clears the disclosure cookie.
-        // eslint-disable-next-line @next/next/no-html-link-for-pages
-        <a
-          className="login-page__back text-sm underline underline-offset-4"
-          href="/api/auth/google-account-id"
-        >
-          Consultar mi identificador Google para solicitar acceso
-        </a>
+        <>
+          <p className="login-page__copy max-w-md text-sm">
+            Puedes consultar tu identificador durante los próximos 2 minutos.
+            Si pasa ese tiempo, vuelve a intentarlo con Google.
+          </p>
+          <Link
+            className="login-page__back text-sm underline underline-offset-4"
+            href="/login/request-access"
+          >
+            Consultar mi identificador Google para solicitar acceso
+          </Link>
+        </>
       ) : null}
     </div>
   );

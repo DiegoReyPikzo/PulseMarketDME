@@ -10,7 +10,7 @@ test.afterEach(async ({ page }) => {
   }
 });
 
-test("denied Google OAuth callback issues an identity disclosure cookie the browser clears after first view, without a session", async ({
+test("denied Google OAuth callback shows the identifier in the request access card and clears the browser cookie, without a session", async ({
   page,
 }) => {
   const disclosureResponses: number[] = [];
@@ -52,10 +52,17 @@ test("denied Google OAuth callback issues an identity disclosure cookie the brow
   expect(disclosureCookie).toBeDefined();
   expect(disclosureCookie?.path).toBe(DISCLOSURE_PATH);
   expect(disclosureCookie?.httpOnly).toBe(true);
+  await expect(
+    page.getByText(
+      "Puedes consultar tu identificador durante los próximos 2 minutos.",
+      { exact: false },
+    ),
+  ).toBeVisible();
   const requestLink = page.getByRole("link", {
     name: "Consultar mi identificador Google para solicitar acceso",
   });
   await expect(requestLink).toBeVisible();
+  await requestLink.hover();
   await page.waitForLoadState("networkidle");
   expect(disclosureResponses).toEqual([]);
 
@@ -65,15 +72,27 @@ test("denied Google OAuth callback issues an identity disclosure cookie the brow
   );
   await requestLink.click();
   const disclosureResponse = await disclosureResponsePromise;
+  expect(disclosureResponse.request().method()).toBe("POST");
   expect(disclosureResponse.status()).toBe(200);
-  await expect(page).toHaveURL(new RegExp(`${DISCLOSURE_PATH}$`));
-  await expect(page.locator("body")).toHaveText(SIMULATED_GOOGLE_SUBJECT);
+  await expect(page).toHaveURL(/\/login\/request-access$/);
+  const card = page.getByRole("region", { name: "Solicitar acceso" });
+  await expect(
+    card.getByText(SIMULATED_GOOGLE_SUBJECT, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: "Copiar identificador" }),
+  ).toBeVisible();
+  expect(disclosureResponses).toEqual([200]);
 
-  const afterCookieCleared = await page.goto(DISCLOSURE_PATH);
-  expect(afterCookieCleared?.status()).toBe(404);
-  await expect(page.locator("body")).toHaveText(
-    "No hay un identificador Google disponible.",
+  await page.reload();
+  await expect(card.getByRole("alert")).toContainText(
+    "No pudimos recuperar tu identificador.",
   );
+  await expect(card.getByText(SIMULATED_GOOGLE_SUBJECT)).toHaveCount(0);
+  await expect(
+    card.getByRole("button", { name: "Reintentar con Google" }),
+  ).toBeVisible();
+  expect(disclosureResponses).toEqual([200, 404]);
 
   const cookies = await page.context().cookies();
   expect(

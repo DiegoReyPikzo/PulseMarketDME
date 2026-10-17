@@ -96,7 +96,7 @@ test("rejects tampered, wrongly signed, malformed, and wrong-purpose tokens", as
   }
 });
 
-test("limits disclosure cookie exposure to the one-use endpoint", () => {
+test("scopes the disclosure cookie to the disclosure endpoint path with strict, short-lived attributes", () => {
   const options = googleAccountDisclosureCookieOptions(true);
   assert.equal(GOOGLE_ACCOUNT_DISCLOSURE_COOKIE, "pulsemarket-google-account-disclosure");
   assert.equal(options.path, GOOGLE_ACCOUNT_DISCLOSURE_PATH);
