@@ -186,14 +186,25 @@ async function main(): Promise<void> {
   const configuration = loadE2eConfiguration();
   const productSuite = process.argv.slice(2).includes("--products");
   const reorderSuite = process.argv.slice(2).includes("--reorder");
-  if (productSuite && reorderSuite) {
-    throw new Error("Choose one E2E product suite per runner invocation.");
+  const googleDenialSuite = process.argv
+    .slice(2)
+    .includes("--google-denial");
+  if (
+    Number(productSuite) +
+      Number(reorderSuite) +
+      Number(googleDenialSuite) >
+    1
+  ) {
+    throw new Error("Choose one E2E suite per runner invocation.");
   }
   const productFixtureSuite = productSuite || reorderSuite;
   const runnerArguments = process.argv
     .slice(2)
     .filter(
-      (argument) => argument !== "--products" && argument !== "--reorder",
+      (argument) =>
+        argument !== "--products" &&
+        argument !== "--reorder" &&
+        argument !== "--google-denial",
     );
   const baseEnvironment: NodeJS.ProcessEnv = {
     ...createE2eChildEnvironment(configuration),
@@ -236,8 +247,10 @@ async function main(): Promise<void> {
     provider = await startE2eOAuthProvider({
       clientId,
       clientSecret,
-      callbackUrl: `${APP_ORIGIN}/api/auth/callback/local-oauth`,
-      subject: runId,
+      callbackUrl: `${APP_ORIGIN}/api/auth/callback/${
+        googleDenialSuite ? "google" : "local-oauth"
+      }`,
+      subject: googleDenialSuite ? "e2e-google-denial-subject" : runId,
     });
 
     const serverEnvironment: NodeJS.ProcessEnv = {
@@ -249,6 +262,9 @@ async function main(): Promise<void> {
       E2E_AUTH_PROVIDER_ORIGIN: provider.origin,
       E2E_AUTH_CLIENT_ID: clientId,
       E2E_AUTH_CLIENT_SECRET: clientSecret,
+      ...(googleDenialSuite
+        ? { PULSEMARKET_E2E_GOOGLE_DENIAL: "true" }
+        : {}),
       NEXT_TELEMETRY_DISABLED: "1",
     };
 
@@ -273,7 +289,9 @@ async function main(): Promise<void> {
           ? "tests/e2e/browser/product-creation.spec.ts"
           : reorderSuite
             ? "tests/e2e/browser/product-reorder.spec.ts"
-            : "tests/e2e/browser/auth.spec.ts",
+            : googleDenialSuite
+              ? "tests/e2e/browser/google-access-request.spec.ts"
+              : "tests/e2e/browser/auth.spec.ts",
         "--config=playwright.config.ts",
         ...runnerArguments,
       ],

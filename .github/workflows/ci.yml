@@ -120,6 +120,7 @@ jobs:
       - name: Test isolated OAuth, products, and reorder flows
         run: |
           npm run e2e:auth
+          npm run e2e:google-request
           npm run e2e:products
           npm run e2e:reorder
 

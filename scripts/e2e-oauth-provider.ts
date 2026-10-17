@@ -90,7 +90,7 @@ function sendDecisionPage(
 <body>
   <main>
     <h1>Proveedor OAuth simulado</h1>
-    <p>Este servidor local de pruebas no contacta GitHub.</p>
+    <p>Este servidor local de pruebas no contacta proveedores reales.</p>
     <form method="post" action="/decision">
       ${hiddenFields}
       <button type="submit" name="decision" value="approve">Autorizar PulseMarket</button>

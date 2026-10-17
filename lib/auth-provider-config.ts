@@ -42,6 +42,16 @@ export function getLoginProviderConfiguration(
             description:
               "Usa un proveedor OAuth simulado local; no inicia sesión en GitHub ni Google.",
           },
+          ...(e2e.googleDenial
+            ? [
+                {
+                  id: "google",
+                  label: "Continuar con Google (simulado para pruebas)",
+                  description:
+                    "Ejecuta un rechazo Google simulado en el entorno E2E aislado.",
+                },
+              ]
+            : []),
         ],
         error: null,
       };

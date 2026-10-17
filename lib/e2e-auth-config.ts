@@ -11,6 +11,7 @@ const E2E_AUTH_KEYS = [
   "E2E_AUTH_PROVIDER_ORIGIN",
   "E2E_AUTH_CLIENT_ID",
   "E2E_AUTH_CLIENT_SECRET",
+  "PULSEMARKET_E2E_GOOGLE_DENIAL",
 ] as const;
 
 export type E2eAuthConfiguration = {
@@ -20,6 +21,7 @@ export type E2eAuthConfiguration = {
   clientSecret: string;
   runId: string;
   nextAuthUrl: URL;
+  googleDenial: boolean;
 };
 
 function isLoopbackHttpUrl(value: string): URL | null {
@@ -58,6 +60,7 @@ export function getE2eAuthConfiguration(
   const providerOriginValue = environment.E2E_AUTH_PROVIDER_ORIGIN;
   const authSecret = environment.NEXTAUTH_SECRET;
   const nextAuthUrlValue = environment.NEXTAUTH_URL;
+  const googleDenialValue = environment.PULSEMARKET_E2E_GOOGLE_DENIAL;
   if (
     !runId ||
     !/^[A-Za-z0-9_-]{43}$/.test(runId) ||
@@ -66,7 +69,8 @@ export function getE2eAuthConfiguration(
     !clientSecret ||
     clientSecret.length < 43 ||
     !authSecret ||
-    authSecret.length < 43
+    authSecret.length < 43 ||
+    (googleDenialValue !== undefined && googleDenialValue !== "true")
   ) {
     throw new Error("The local E2E OAuth configuration is incomplete.");
   }
@@ -111,5 +115,6 @@ export function getE2eAuthConfiguration(
     clientSecret,
     runId,
     nextAuthUrl,
+    googleDenial: googleDenialValue === "true",
   };
 }
