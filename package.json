@@ -4,26 +4,64 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "test:unit": "node --conditions=react-server --import tsx --test tests/queries/unit.test.ts",
+    "test:dashboard": "node --conditions=react-server --import tsx --test tests/dashboard/list-params.test.ts",
+    "test:auth": "node --conditions=react-server --import tsx --test tests/auth/authorization.test.ts tests/auth/google-account-disclosure.test.ts tests/auth/session.test.ts",
+    "test:integration": "node --conditions=react-server --import tsx --test tests/queries/integration.test.ts",
+    "test:mutations:unit": "node --conditions=react-server --import tsx --test tests/catalog-mutations/unit.test.ts",
+    "test:mutations:integration": "node --conditions=react-server --import tsx --test tests/catalog-mutations/integration.test.ts",
+    "test:analytics:unit": "node --conditions=react-server --import tsx --test tests/analytics/unit.test.ts",
+    "test:analytics:integration": "node --conditions=react-server --import tsx --test tests/analytics/integration.test.ts",
+    "test:product-creation:unit": "node --conditions=react-server --import tsx --test tests/product-creation/unit.test.ts",
+    "test:product-creation:integration": "node --conditions=react-server --import tsx --test tests/product-creation/integration.test.ts",
+    "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts",
+    "db:analytics-benchmark": "node --conditions=react-server --import tsx scripts/benchmark-analytics.ts",
+    "e2e:config:test": "node --conditions=react-server --import tsx --test tests/e2e/environment.test.ts tests/e2e/oauth-provider.test.ts",
+    "e2e:preflight": "node --import tsx scripts/e2e-preflight.ts",
+    "e2e:with-env": "node --import tsx scripts/e2e-with-env.ts",
+    "e2e:auth": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts",
+    "e2e:products": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --products",
+    "e2e:reorder": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --reorder"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "next": "16.4.2",
+    "next-auth": "^4.24.15",
+    "pg": "^8.23.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^18.0.8",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "prisma": "^7.10.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "allowScripts": {
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true,
+    "esbuild@0.28.2": true
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

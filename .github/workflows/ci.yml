@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulsemarket-ci
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: e2e
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DIRECT_URL: ${{ secrets.E2E_DIRECT_URL }}
+
+      - name: Generate Next.js types
+        run: npx next typegen
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test unit suites
+        run: |
+          npm run test:unit
+          npm run test:dashboard
+          npm run test:auth
+          npm run test:mutations:unit
+          npm run test:analytics:unit
+          npm run test:product-creation:unit
+
+      - name: Test E2E configuration
+        run: npm run e2e:config:test
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Create isolated E2E configuration files
+        id: prepare_e2e
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from "node:fs";
+
+          const connectionKeys = ["E2E_DATABASE_URL", "E2E_DIRECT_URL"];
+          const targetKeys = [
+            "E2E_ALLOWED_DIRECT_HOST",
+            "E2E_ALLOWED_POOLED_HOST",
+            "E2E_ALLOWED_DATABASE",
+            "E2E_ALLOWED_ROLE",
+          ];
+          const allKeys = [...connectionKeys, ...targetKeys];
+          const missing = allKeys.filter((key) => !process.env[key]?.trim());
+          if (missing.length > 0) {
+            console.error(`Missing GitHub Environment secrets: ${missing.join(", ")}`);
+            process.exit(1);
+          }
+
+          const writeEnv = (path, keys) => {
+            const contents = keys
+              .map((key) => `${key}=${JSON.stringify(process.env[key])}`)
+              .join("\n");
+            writeFileSync(path, `${contents}\n`, { mode: 0o600 });
+          };
+          writeEnv(".env.e2e.local", connectionKeys);
+          writeEnv(".env.e2e.target.local", targetKeys);
+          appendFileSync(process.env.GITHUB_OUTPUT, "ready=true\n");
+          NODE
+        env:
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          E2E_DIRECT_URL: ${{ secrets.E2E_DIRECT_URL }}
+          E2E_ALLOWED_DIRECT_HOST: ${{ secrets.E2E_ALLOWED_DIRECT_HOST }}
+          E2E_ALLOWED_POOLED_HOST: ${{ secrets.E2E_ALLOWED_POOLED_HOST }}
+          E2E_ALLOWED_DATABASE: ${{ secrets.E2E_ALLOWED_DATABASE }}
+          E2E_ALLOWED_ROLE: ${{ secrets.E2E_ALLOWED_ROLE }}
+
+      - name: Preflight the isolated E2E database
+        run: npm run e2e:preflight
+
+      - name: Apply repository migrations to the isolated E2E database
+        run: npm run e2e:with-env -- npx prisma migrate deploy
+
+      - name: Verify migrated E2E database is empty
+        run: npm run e2e:preflight
+
+      - name: Test database integration suites
+        run: |
+          npm run e2e:with-env -- npm run test:integration
+          npm run e2e:with-env -- npm run test:mutations:integration
+          npm run e2e:with-env -- npm run test:analytics:integration
+          npm run e2e:with-env -- npm run test:product-creation:integration
+
+      - name: Test isolated OAuth, products, and reorder flows
+        run: |
+          npm run e2e:auth
+          npm run e2e:products
+          npm run e2e:reorder
+
+      - name: Verify E2E database fixture cleanup
+        if: always() && steps.prepare_e2e.outputs.ready == 'true'
+        run: npm run e2e:preflight
+
+      - name: Remove isolated E2E configuration files
+        if: always()
+        run: rm -f .env.e2e.local .env.e2e.target.local
+
+      - name: Build production application
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.E2E_DIRECT_URL }}

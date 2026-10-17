@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/generated
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,9 +13,18 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.playwright-e2e/
+/.auth/
+**/storageState*.json
+**/playwright/.auth/
+**/playwright-report/
+**/test-results/
 
 # next.js
 /.next/
+/.next-e2e/
 /out/
 
 # production
@@ -32,6 +42,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!.env.e2e.target.example
 
 # vercel
 .vercel
