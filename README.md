@@ -140,6 +140,29 @@ confirmed:
 - Opening `/dashboard` directly without a session was blocked and redirected to
   `/login`.
 
+## Dashboard listings
+
+The authenticated `/dashboard` route redirects to `/dashboard/products`.
+Protected listings are available at `/dashboard/products`,
+`/dashboard/customers`, and `/dashboard/sales`. Each route verifies the session
+on the server before calling its existing Prisma-backed listing function.
+Filtering, sorting, pagination, and matching counts therefore execute in
+PostgreSQL; no listing loads a full table into application memory.
+
+GET forms keep their current filters, sort, and page size in the URL. Applying
+any form starts at page 1; previous/next links preserve those criteria. Each
+listing offers page sizes 20, 50, and 100. Product filters use the current
+search/category fields, customers use search, and sales use search, customer
+UUID, status, and inclusive UTC date bounds. Order fields remain limited to
+the allowlists documented in the server-query section. Invalid, repeated, or
+unsupported URL parameters render a validation message and reset link without
+querying the database. Database failures reach a retryable error boundary and
+are not displayed as empty results.
+
+Sales and product prices are shown as stored decimal strings without assigning
+a currency. Sales rows include the existing related customer summary and do
+not fetch sale items.
+
 ## Getting Started
 
 First, run the development server:
