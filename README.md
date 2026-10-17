@@ -96,6 +96,50 @@ maximum for those 20 samples. The p95 uses the nearest-rank method:
 `sorted[ceil(0.95 * n) - 1]` (the 19th ordered sample for 20 runs). Results
 include local runtime and network latency and are not a server-only query plan.
 
+## GitHub authentication
+
+Authentication uses stable NextAuth.js v4 with only the GitHub OAuth provider.
+Sessions use encrypted JWT cookies, so this setup does not add auth tables to
+PostgreSQL. `/dashboard` calls `getServerSession` on the server and redirects
+unauthenticated visitors to `/login` before calling `listProducts`. The
+dashboard is a demonstration only: any GitHub account that completes sign-in
+can see the same demo product data; there are no per-user permissions or roles.
+
+Set `GITHUB_ID`, `GITHUB_SECRET`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` in the
+ignored `.env` file. To append a newly generated session secret locally without
+printing it to the terminal, run this PowerShell command once, then fill the
+GitHub OAuth values in `.env`:
+
+```powershell
+node -e "process.stdout.write('NEXTAUTH_SECRET=' + require('node:crypto').randomBytes(32).toString('base64url') + '\n')" | Add-Content -Path .env
+```
+
+For local development, set `NEXTAUTH_URL` to `http://localhost:3000`.
+Register a GitHub OAuth App named `PulseMarket Local Development` with
+homepage `http://localhost:3000` and callback
+`http://localhost:3000/api/auth/callback/github`. The callback path is
+NextAuth.js v4's default GitHub OAuth callback for the `/api/auth/[...nextauth]`
+Route Handler. Do not reuse these local URLs as production settings; configure
+the actual deployment origin separately when one exists.
+
+The session-guard unit tests are separate from the query tests:
+
+```powershell
+npm.cmd run test:auth
+```
+
+These tests check the server guard's authenticated and unauthenticated branches;
+they do not simulate or validate a live GitHub OAuth exchange.
+
+Manual browser verification (performed by the user; not an automated E2E test)
+confirmed:
+
+- GitHub OAuth sign-in completed successfully.
+- The dashboard displayed the signed-in identity and product list.
+- Signing out redirected to `/login`.
+- Opening `/dashboard` directly without a session was blocked and redirected to
+  `/login`.
+
 ## Getting Started
 
 First, run the development server:

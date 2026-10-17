@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "test:unit": "node --conditions=react-server --import tsx --test tests/queries/unit.test.ts",
+    "test:auth": "node --conditions=react-server --import tsx --test tests/auth/session.test.ts",
     "test:integration": "node --conditions=react-server --import tsx --test tests/queries/integration.test.ts",
     "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts"
   },
@@ -17,6 +18,7 @@
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "next": "16.4.2",
+    "next-auth": "^4.24.15",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
