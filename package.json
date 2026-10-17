@@ -26,6 +26,7 @@
     "e2e:preflight": "node --import tsx scripts/e2e-preflight.ts",
     "e2e:with-env": "node --import tsx scripts/e2e-with-env.ts",
     "e2e:auth": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts",
+    "e2e:google-request": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --google-denial",
     "e2e:products": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --products",
     "e2e:reorder": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --reorder"
   },

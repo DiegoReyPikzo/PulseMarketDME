@@ -26,11 +26,12 @@ type LocalOAuthProfile = z.infer<typeof localOAuthProfileSchema>;
 
 function createLocalOAuthProvider(
   configuration: NonNullable<ReturnType<typeof getE2eAuthConfiguration>>,
+  providerId = E2E_AUTH_PROVIDER_ID,
 ): OAuthConfig<LocalOAuthProfile> {
   const origin = configuration.providerOrigin;
   return {
-    id: E2E_AUTH_PROVIDER_ID,
-    name: "Local OAuth simulator",
+    id: providerId,
+    name: providerId === "google" ? "Google (E2E simulator)" : "Local OAuth simulator",
     type: "oauth",
     authorization: {
       url: new URL("/authorize", origin).toString(),
@@ -62,7 +63,12 @@ const loginProviders = getLoginProviderConfiguration(process.env).providers;
 
 export const authOptions = {
   providers: e2eAuthConfiguration
-    ? [createLocalOAuthProvider(e2eAuthConfiguration)]
+    ? [
+        createLocalOAuthProvider(e2eAuthConfiguration),
+        ...(e2eAuthConfiguration.googleDenial
+          ? [createLocalOAuthProvider(e2eAuthConfiguration, "google")]
+          : []),
+      ]
     : loginProviders.flatMap((provider) => {
         if (provider.id === "github") {
           return [
@@ -91,6 +97,7 @@ export const authOptions = {
   },
   pages: {
     signIn: "/login",
+    error: "/login",
   },
   callbacks: {
     async signIn({ account }) {

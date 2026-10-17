@@ -315,6 +315,17 @@ test("rejects any E2E provider activation in production", () => {
   );
 });
 
+test("rejects the simulated Google denial provider in production", () => {
+  assert.throws(
+    () =>
+      getE2eAuthConfiguration({
+        NODE_ENV: "production",
+        PULSEMARKET_E2E_GOOGLE_DENIAL: "true",
+      }),
+    /forbidden in production/,
+  );
+});
+
 test("rejects an E2E provider if the runtime database differs from the approved E2E target", () => {
   const environment = validE2eAuthEnvironment();
   environment.DATABASE_URL = "postgresql://development";
@@ -362,6 +373,30 @@ test("enables the local OAuth provider only with validated target and ephemeral 
       environment,
     ),
     false,
+  );
+});
+
+test("exposes the simulated Google denial option only in the isolated E2E configuration", () => {
+  const environment = {
+    ...validE2eAuthEnvironment(),
+    PULSEMARKET_E2E_GOOGLE_DENIAL: "true",
+  };
+  const configuration = getE2eAuthConfiguration(environment);
+  assert.equal(configuration?.googleDenial, true);
+  assert.deepEqual(
+    getLoginProviderConfiguration(environment).providers.map(({ id }) => id),
+    [E2E_AUTH_PROVIDER_ID, "google"],
+  );
+});
+
+test("rejects malformed simulated Google denial activation", () => {
+  const environment = {
+    ...validE2eAuthEnvironment(),
+    PULSEMARKET_E2E_GOOGLE_DENIAL: "yes",
+  };
+  assert.throws(
+    () => getE2eAuthConfiguration(environment),
+    /local E2E OAuth configuration is incomplete/,
   );
 });
 
