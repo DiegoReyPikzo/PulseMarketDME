@@ -20,6 +20,28 @@ async function authorizeWithLocalProvider(
   ).toBeVisible();
 }
 
+test("shows the PulseMarket landing page to a visitor and links to login", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", { name: "PulseMarket" }),
+  ).toBeVisible();
+  await expect(page.getByText("Panel de gestión", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Iniciar sesión" }),
+  ).toHaveAttribute("href", "/login");
+  await expect(page.getByText("Deploy Now")).toHaveCount(0);
+  await expect(page.getByText("Documentation")).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Iniciar sesión" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(
+    page.getByRole("button", { name: "Continuar con OAuth simulado" }),
+  ).toBeVisible();
+});
+
 test("redirects an unauthenticated dashboard request to login", async ({
   page,
 }) => {
@@ -134,6 +156,8 @@ test("completes local OAuth through NextAuth and opens the protected product lis
   await authorizeWithLocalProvider(page);
   await page.getByRole("button", { name: "Autorizar PulseMarket" }).click();
 
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
     page.getByRole("banner").getByText("E2E Test User"),
