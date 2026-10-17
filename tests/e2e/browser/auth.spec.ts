@@ -28,7 +28,11 @@ test("shows the PulseMarket landing page to a visitor and links to login", async
   await expect(
     page.getByRole("heading", { name: "PulseMarket" }),
   ).toBeVisible();
-  await expect(page.getByText("Panel de gestión", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "PulseMarket" })
+      .getByText("Panel de gestión", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Iniciar sesión" }),
   ).toHaveAttribute("href", "/login");
