@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { DragEvent } from "react";
 
 import {
@@ -10,8 +10,9 @@ import {
   softDeleteProductAction,
   type ProductMutationActionState,
 } from "./actions";
+import { ProductEditDialog } from "./product-edit-dialog";
 
-type ProductListItem = {
+export type ProductListItem = {
   id: string;
   sku: string;
   name: string;
@@ -25,11 +26,13 @@ export function ProductCatalogTable({
   allowReorder,
   page,
   pageSize,
+  onFeedback,
 }: {
   products: readonly ProductListItem[];
   allowReorder: boolean;
   page: number;
   pageSize: number;
+  onFeedback(feedback: ProductMutationActionState | null): void;
 }) {
   const router = useRouter();
   const [orderedProducts, setOrderedProducts] = useState([...products]);
@@ -37,14 +40,22 @@ export function ProductCatalogTable({
   const [operation, setOperation] = useState<"category" | "adjust">("category");
   const [field, setField] = useState<"price" | "stock">("price");
   const [mode, setMode] = useState<"fixed" | "percentage">("fixed");
-  const [feedback, setFeedback] = useState<ProductMutationActionState | null>(
-    null,
-  );
   const [draggingProductId, setDraggingProductId] = useState<string | null>(
     null,
   );
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const editButtons = useRef(new Map<string, HTMLButtonElement>());
   const [pending, startTransition] = useTransition();
+  // Row order is local state (for optimistic reordering); row values always
+  // come from the latest server props so edits appear after a refresh.
+  const latestById = new Map(products.map((product) => [product.id, product]));
+  const visibleProducts = orderedProducts.map(
+    (product) => latestById.get(product.id) ?? product,
+  );
   const visibleIds = orderedProducts.map(({ id }) => id);
   const selectedVisibleCount = visibleIds.filter((id) =>
     selectedIds.includes(id),
@@ -61,11 +72,25 @@ export function ProductCatalogTable({
   }
 
   function applyResult(result: ProductMutationActionState) {
-    setFeedback(result);
+    onFeedback(result);
     if (result.status === "success") {
       setSelectedIds([]);
       router.refresh();
     }
+  }
+
+  function closeEditor() {
+    const productId = editingProduct?.id;
+    setEditingProduct(null);
+    if (productId) {
+      requestAnimationFrame(() => editButtons.current.get(productId)?.focus());
+    }
+  }
+
+  function handleEditSaved(sku: string) {
+    closeEditor();
+    onFeedback({ status: "success", message: `Producto ${sku} actualizado.` });
+    router.refresh();
   }
 
   function runIndividualDelete(id: string) {
@@ -98,7 +123,7 @@ export function ProductCatalogTable({
   function persistOrder(nextProducts: ProductListItem[]) {
     const previousProducts = orderedProducts;
     setOrderedProducts(nextProducts);
-    setFeedback(null);
+    onFeedback(null);
 
     const formData = new FormData();
     formData.set("productIds", JSON.stringify(nextProducts.map(({ id }) => id)));
@@ -111,7 +136,7 @@ export function ProductCatalogTable({
     startTransition(async () => {
       try {
         const result = await reorderProductsAction(formData);
-        setFeedback(result);
+        onFeedback(result);
         if (result.status === "success") {
           router.refresh();
         } else {
@@ -119,7 +144,7 @@ export function ProductCatalogTable({
         }
       } catch {
         setOrderedProducts(previousProducts);
-        setFeedback({
+        onFeedback({
           status: "error",
           message: "No se pudo guardar el orden. Se restauró la posición anterior.",
         });
@@ -154,10 +179,7 @@ export function ProductCatalogTable({
   }
 
   return (
-    <section
-      aria-label="Gestión del catálogo"
-      className="dashboard-product-catalog min-w-0 space-y-4"
-    >
+    <div className="min-w-0 space-y-4">
       {allowReorder ? (
         <p className="dashboard-listing__hint text-sm">
           Arrastra el control de una fila o usa los botones Subir y Bajar para
@@ -284,20 +306,6 @@ export function ProductCatalogTable({
         </p>
       ) : null}
 
-      {feedback ? (
-        <p
-          aria-live="polite"
-          className={`dashboard-listing__feedback rounded-lg p-3 text-sm ${
-            feedback.status === "success"
-              ? "dashboard-listing__feedback--success"
-              : "dashboard-listing__feedback--error"
-          }`}
-          role={feedback.status === "error" ? "alert" : "status"}
-        >
-          {feedback.message}
-        </p>
-      ) : null}
-
       <div className="dashboard-product-catalog__table-scroll min-w-0 max-w-full overflow-x-auto rounded-xl">
         <table className="dashboard-product-catalog__table w-full min-w-[760px] text-left text-sm">
           <caption className="sr-only">Resultados y acciones de productos</caption>
@@ -338,7 +346,7 @@ export function ProductCatalogTable({
                 </td>
               </tr>
             ) : (
-            orderedProducts.map((product, index) => (
+            visibleProducts.map((product, index) => (
               <tr
                 className={[
                   "dashboard-product-catalog__row",
@@ -453,7 +461,22 @@ export function ProductCatalogTable({
                   <td className="dashboard-product-catalog__cell dashboard-product-catalog__numeric px-4 py-3.5 text-right tabular-nums">
                     {product.stock}
                   </td>
-                  <td className="dashboard-product-catalog__cell px-4 py-3.5 text-right">
+                  <td className="dashboard-product-catalog__cell whitespace-nowrap px-4 py-3.5 text-right">
+                    <button
+                      aria-label={`Editar ${product.name}`}
+                      className="dashboard-product-catalog__edit rounded px-2 py-1 text-xs underline underline-offset-4 disabled:opacity-50"
+                      disabled={pending}
+                      onClick={() =>
+                        setEditingProduct({ id: product.id, name: product.name })
+                      }
+                      ref={(element) => {
+                        if (element) editButtons.current.set(product.id, element);
+                        else editButtons.current.delete(product.id);
+                      }}
+                      type="button"
+                    >
+                      Editar
+                    </button>
                     <button
                       className="dashboard-product-catalog__delete rounded px-2 py-1 text-xs underline underline-offset-4 disabled:opacity-50"
                       disabled={pending}
@@ -474,7 +497,16 @@ export function ProductCatalogTable({
           Aplicando cambios...
         </p>
       ) : null}
-    </section>
+      {editingProduct ? (
+        <ProductEditDialog
+          key={editingProduct.id}
+          onClose={closeEditor}
+          onSaved={handleEditSaved}
+          productId={editingProduct.id}
+          productName={editingProduct.name}
+        />
+      ) : null}
+    </div>
   );
 }
 

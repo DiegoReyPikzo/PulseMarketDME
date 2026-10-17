@@ -125,11 +125,11 @@ export type ProductMutationRecord = {
   sortOrder: number;
 };
 
-export type ProductValueUpdate = {
-  id: string;
-  price?: Prisma.Decimal;
-  stock?: number;
-};
+// `expected` holds the value read before computing the adjustment; the write
+// only applies while the row still has it, so a concurrent edit is not lost.
+export type ProductValueUpdate =
+  | { id: string; price: Prisma.Decimal; expected: { price: Prisma.Decimal } }
+  | { id: string; stock: number; expected: { stock: number } };
 
 export interface ProductMutationRepository {
   findByIds(ids: readonly string[]): Promise<ProductMutationRecord[]>;
@@ -197,9 +197,9 @@ export function createProductMutationRepository(
     },
     updateValues: async (updates) => {
       const results = await Promise.all(
-        updates.map(({ id, ...data }) =>
+        updates.map(({ id, expected, ...data }) =>
           transaction.product.updateMany({
-            where: { id, deletedAt: null },
+            where: { id, deletedAt: null, ...expected },
             data,
           }),
         ),
@@ -278,7 +278,7 @@ export async function mutateProducts(
     return count;
   }
 
-  const updates = records.map((product) => {
+  const updates = records.map((product): ProductValueUpdate => {
     const amount = new Prisma.Decimal(input.amount);
     const adjusted =
       input.mode === "percentage"
@@ -299,7 +299,7 @@ export async function mutateProducts(
           `El ajuste dejaría el precio del producto ${product.id} fuera del rango permitido.`,
         );
       }
-      return { id: product.id, price };
+      return { id: product.id, price, expected: { price: product.price } };
     }
 
     const stock = adjusted.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
@@ -308,9 +308,15 @@ export async function mutateProducts(
         `El ajuste dejaría el stock del producto ${product.id} fuera del rango permitido.`,
       );
     }
-    return { id: product.id, stock: stock.toNumber() };
+    return {
+      id: product.id,
+      stock: stock.toNumber(),
+      expected: { stock: product.stock },
+    };
   });
 
+  // A conflicting row makes the count fall short; the thrown error rolls back
+  // the whole batch transaction.
   const count = await repository.updateValues(updates);
   assertUpdatedCount(count, input.ids.length);
   return count;

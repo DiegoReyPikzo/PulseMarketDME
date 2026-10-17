@@ -70,12 +70,20 @@ function createMemoryRepository(
       return ids.length;
     },
     async updateValues(updates: readonly ProductValueUpdate[]) {
-      for (const update of updates) {
+      let count = 0;
+      for (const { expected, ...update } of updates) {
         const product = products.get(update.id);
         assert.ok(product);
-        products.set(update.id, { ...product, ...update });
+        const matches =
+          "price" in expected
+            ? product.price.equals(expected.price)
+            : product.stock === expected.stock;
+        if (product.deletedAt === null && matches) {
+          products.set(update.id, { ...product, ...update });
+          count += 1;
+        }
       }
-      return updates.length;
+      return count;
     },
     async updatePositions(updates) {
       for (const update of updates) {
@@ -365,4 +373,91 @@ test("rejects a stale page snapshot before changing any positions", async () => 
   );
   assert.equal(products.get(productA)?.sortOrder, 100);
   assert.equal(products.get(productB)?.sortOrder, 200);
+});
+
+test("conditions every bulk adjustment write on the value read before computing it", async () => {
+  const { repository } = createMemoryRepository([
+    activeProduct(productA, { price: new Prisma.Decimal("10.00"), stock: 4 }),
+    activeProduct(productB, { price: new Prisma.Decimal("20.00"), stock: 6 }),
+  ]);
+  const captured: ProductValueUpdate[] = [];
+  const recording: ProductMutationRepository = {
+    ...repository,
+    async updateValues(updates) {
+      captured.push(...updates);
+      return repository.updateValues(updates);
+    },
+  };
+
+  await mutateProducts(
+    recording,
+    bulkProductMutationInputSchema.parse({
+      ids: [productA, productB],
+      operation: "adjust",
+      field: "price",
+      mode: "fixed",
+      amount: "1",
+    }),
+    new Date(),
+  );
+  assert.deepEqual(
+    captured.map((update) =>
+      "price" in update.expected ? update.expected.price.toFixed(2) : null,
+    ),
+    ["10.00", "20.00"],
+  );
+
+  captured.length = 0;
+  await mutateProducts(
+    recording,
+    bulkProductMutationInputSchema.parse({
+      ids: [productA],
+      operation: "adjust",
+      field: "stock",
+      mode: "fixed",
+      amount: "2",
+    }),
+    new Date(),
+  );
+  assert.deepEqual(captured, [
+    { id: productA, stock: 6, expected: { stock: 4 } },
+  ]);
+});
+
+test("fails the bulk adjustment when a row changed between the read and the write", async () => {
+  const { repository, products } = createMemoryRepository([
+    activeProduct(productA, { price: new Prisma.Decimal("10.00") }),
+    activeProduct(productB, { price: new Prisma.Decimal("20.00") }),
+  ]);
+  const racing: ProductMutationRepository = {
+    ...repository,
+    async findByIds(ids) {
+      const records = await repository.findByIds(ids);
+      const current = products.get(productB);
+      assert.ok(current);
+      products.set(productB, {
+        ...current,
+        price: new Prisma.Decimal("25.00"),
+      });
+      return records;
+    },
+  };
+
+  await assert.rejects(
+    mutateProducts(
+      racing,
+      bulkProductMutationInputSchema.parse({
+        ids: [productA, productB],
+        operation: "adjust",
+        field: "price",
+        mode: "percentage",
+        amount: "10",
+      }),
+      new Date(),
+    ),
+    (error: unknown) =>
+      error instanceof ProductMutationError &&
+      error.message.startsWith("El catálogo cambió durante la operación."),
+  );
+  assert.ok(products.get(productB)?.price.equals("25.00"));
 });

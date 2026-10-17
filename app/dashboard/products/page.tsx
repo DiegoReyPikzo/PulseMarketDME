@@ -11,7 +11,7 @@ import {
 import { productListInputSchema } from "../../../lib/queries/inputs";
 import { listProducts } from "../../../lib/queries/products";
 import { DashboardShell } from "../dashboard-shell";
-import { ProductCatalogTable } from "./product-catalog-table";
+import { ProductCatalog } from "./product-catalog";
 import { ProductCreationForm } from "./product-creation-form";
 import {
   ListingForm,
@@ -83,9 +83,8 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
           tamaño de página de hasta 50 productos.
         </p>
       ) : null}
-      <ProductCatalogTable
+      <ProductCatalog
         allowReorder={allowReorder}
-        key={result.items.map(({ id }) => id).join("|")}
         page={input.page}
         pageSize={input.pageSize}
         products={result.items}

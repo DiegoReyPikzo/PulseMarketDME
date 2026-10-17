@@ -13,15 +13,33 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+// Each product suite owns one exact set of SKU suffixes, all sharing a single
+// run ID; any other combination is rejected.
+const FIXTURE_SUFFIX_SETS: readonly (readonly string[])[] = [
+  ["ZERO", "DUP", "INVALID"],
+  ["DRAG-1", "DRAG-2", "DRAG-3"],
+  ["EDIT-A", "EDIT-B", "EDIT-C", "EDIT-R"],
+];
+
 function readFixtureSkus(): string[] {
   const encoded = process.env.PULSEMARKET_E2E_PRODUCT_SKUS;
   if (!encoded) throw new Error("E2E product fixture identifiers are missing.");
   const parsed: unknown = JSON.parse(encoded);
+  if (!isStringArray(parsed)) {
+    throw new Error("E2E product fixture identifiers are invalid.");
+  }
+  const matches = parsed.map((sku) =>
+    /^PME2E-([a-f0-9]{32})-((?:ZERO|DUP|INVALID|DRAG-[123]|EDIT-[ABCR]))$/.exec(sku),
+  );
+  const runIds = new Set(matches.map((match) => match?.[1]));
+  const suffixes = matches.map((match) => match?.[2]);
   if (
-    !isStringArray(parsed) ||
-    parsed.length !== 3 ||
-    !parsed.every((sku) =>
-      /^PME2E-[a-f0-9]{32}-(?:ZERO|DUP|INVALID|DRAG-[123])$/.test(sku),
+    matches.some((match) => match === null) ||
+    runIds.size !== 1 ||
+    !FIXTURE_SUFFIX_SETS.some(
+      (set) =>
+        set.length === suffixes.length &&
+        set.every((suffix, index) => suffixes[index] === suffix),
     )
   ) {
     throw new Error("E2E product fixture identifiers are invalid.");
