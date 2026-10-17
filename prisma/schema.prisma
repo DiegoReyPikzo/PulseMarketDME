@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model Product {
+  id          String     @id @default(uuid()) @db.Uuid
+  sku         String     @unique @db.VarChar(64)
+  name        String     @db.VarChar(160)
+  description String?    @db.Text
+  category    String?    @db.VarChar(100)
+  price       Decimal    @db.Decimal(12, 2)
+  stock       Int        @default(0)
+  deletedAt   DateTime?  @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(6)
+  seedKey     String?    @unique @db.VarChar(100)
+  saleItems   SaleItem[]
+
+  @@index([deletedAt, createdAt(sort: Desc)])
+  @@index([deletedAt, category, name])
+}
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(160)
+  email     String   @unique @db.VarChar(254)
+  phone     String?  @db.VarChar(32)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  seedKey   String?  @unique @db.VarChar(100)
+  sales     Sale[]
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model Sale {
+  id         String     @id @default(uuid()) @db.Uuid
+  customerId String     @db.Uuid
+  status     SaleStatus @default(PENDING)
+  saleDate   DateTime   @default(now()) @db.Timestamptz(6)
+  total      Decimal    @db.Decimal(14, 2)
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime   @updatedAt @db.Timestamptz(6)
+  seedKey    String?    @unique @db.VarChar(100)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items      SaleItem[]
+
+  @@index([customerId, saleDate(sort: Desc)])
+  @@index([saleDate(sort: Desc)])
+}
+
+model SaleItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  saleId    String   @db.Uuid
+  productId String   @db.Uuid
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(12, 2)
+  lineTotal Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  seedKey   String?  @unique @db.VarChar(100)
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([saleId, productId])
+  @@index([productId, saleId])
+}

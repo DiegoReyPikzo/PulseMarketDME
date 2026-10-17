@@ -1,5 +1,48 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Database
+
+PulseMarket uses PostgreSQL through Prisma ORM 7. The schema defines:
+
+- `Product`: unique SKU, name, optional description and category, current price
+  (`Decimal(12,2)`), stock, timestamps, and nullable `deletedAt` for soft
+  deletion. Catalog indexes support active/deleted filtering with recent-first
+  ordering and category/name lookups.
+- `Customer`: name, unique email, optional phone, and timestamps.
+- `Sale`: required customer relation, status, sale date, and `Decimal(14,2)`
+  total. Customer/date and date indexes support sales history queries.
+- `SaleItem`: required sale and product relations, quantity, historical
+  `Decimal(12,2)` unit price, and `Decimal(14,2)` line total. A sale cannot
+  contain the same product twice; product/sale indexes support product history.
+
+All relations use restrictive deletes to protect sales history. Products are
+retired by setting `deletedAt`, not by deleting their rows. Nullable unique
+`seedKey` fields identify only the deterministic sample records.
+
+Set `DATABASE_URL` to Neon’s pooled application connection and `DIRECT_URL` to
+the direct migration connection in the ignored local `.env` file. Never commit
+that file. Prepare a migration with:
+
+```powershell
+npx.cmd prisma migrate dev --name init
+```
+
+Regenerate the client after schema changes with:
+
+```powershell
+npx.cmd prisma generate
+```
+
+Apply the deterministic sample data with:
+
+```powershell
+npx.cmd prisma db seed
+```
+
+The seed creates 100 products, 500 customers, 2,000 sales, and 8,000 sale
+items (10,600 records total). Its fixed IDs and unique seed keys make repeated
+runs safe; it inserts only these records and never deletes existing data.
+
 ## Getting Started
 
 First, run the development server:
