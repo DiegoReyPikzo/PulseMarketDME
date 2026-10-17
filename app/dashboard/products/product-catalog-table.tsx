@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import type { DragEvent } from "react";
 
 import {
   bulkMutateProductsAction,
+  reorderProductsAction,
   softDeleteProductAction,
   type ProductMutationActionState,
 } from "./actions";
@@ -20,10 +22,17 @@ type ProductListItem = {
 
 export function ProductCatalogTable({
   products,
+  allowReorder,
+  page,
+  pageSize,
 }: {
   products: readonly ProductListItem[];
+  allowReorder: boolean;
+  page: number;
+  pageSize: number;
 }) {
   const router = useRouter();
+  const [orderedProducts, setOrderedProducts] = useState([...products]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [operation, setOperation] = useState<"category" | "adjust">("category");
   const [field, setField] = useState<"price" | "stock">("price");
@@ -32,7 +41,7 @@ export function ProductCatalogTable({
     null,
   );
   const [pending, startTransition] = useTransition();
-  const visibleIds = products.map(({ id }) => id);
+  const visibleIds = orderedProducts.map(({ id }) => id);
   const selectedVisibleCount = visibleIds.filter((id) =>
     selectedIds.includes(id),
   ).length;
@@ -82,8 +91,72 @@ export function ProductCatalogTable({
     });
   }
 
+  function persistOrder(nextProducts: ProductListItem[]) {
+    const previousProducts = orderedProducts;
+    setOrderedProducts(nextProducts);
+    setFeedback(null);
+
+    const formData = new FormData();
+    formData.set("productIds", JSON.stringify(nextProducts.map(({ id }) => id)));
+    formData.set(
+      "expectedProductIds",
+      JSON.stringify(previousProducts.map(({ id }) => id)),
+    );
+    formData.set("page", String(page));
+    formData.set("pageSize", String(pageSize));
+    startTransition(async () => {
+      try {
+        const result = await reorderProductsAction(formData);
+        setFeedback(result);
+        if (result.status === "success") {
+          router.refresh();
+        } else {
+          setOrderedProducts(previousProducts);
+        }
+      } catch {
+        setOrderedProducts(previousProducts);
+        setFeedback({
+          status: "error",
+          message: "No se pudo guardar el orden. Se restauró la posición anterior.",
+        });
+      }
+    });
+  }
+
+  function moveProduct(sourceId: string, targetIndex: number) {
+    const sourceIndex = orderedProducts.findIndex(
+      (product) => product.id === sourceId,
+    );
+    if (
+      sourceIndex < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= orderedProducts.length ||
+      sourceIndex === targetIndex ||
+      pending
+    ) {
+      return;
+    }
+
+    const nextProducts = [...orderedProducts];
+    const [moved] = nextProducts.splice(sourceIndex, 1);
+    nextProducts.splice(targetIndex, 0, moved);
+    persistOrder(nextProducts);
+  }
+
+  function handleDrop(event: DragEvent<HTMLTableRowElement>, targetIndex: number) {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData("text/plain");
+    if (sourceId) moveProduct(sourceId, targetIndex);
+  }
+
   return (
     <section aria-label="Gestión del catálogo" className="space-y-4">
+      {allowReorder ? (
+        <p className="text-sm text-slate-400">
+          Arrastra el control de una fila o usa los botones Subir y Bajar para
+          guardar el orden del catálogo.
+        </p>
+      ) : null}
       {selectedIds.length > 0 ? (
         <form
           action={async (formData) => {
@@ -234,6 +307,11 @@ export function ProductCatalogTable({
                   type="checkbox"
                 />
               </th>
+              {allowReorder ? (
+                <th className="w-24 px-4 py-3 font-medium" scope="col">
+                  Orden
+                </th>
+              ) : null}
               <th className="px-4 py-3 font-medium" scope="col">SKU</th>
               <th className="px-4 py-3 font-medium" scope="col">Producto</th>
               <th className="px-4 py-3 font-medium" scope="col">Categoría</th>
@@ -243,16 +321,30 @@ export function ProductCatalogTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {products.length === 0 ? (
+            {            orderedProducts.length === 0 ? (
               <tr>
-                <td className="px-4 py-12 text-center text-slate-400" colSpan={7}>
+                <td
+                  className="px-4 py-12 text-center text-slate-400"
+                  colSpan={allowReorder ? 8 : 7}
+                >
                   No se encontraron resultados con estos criterios.
                 </td>
               </tr>
             ) : (
-              products.map((product) => (
-                <tr className="hover:bg-slate-900/50" key={product.id}>
-                  <td className="px-4 py-3.5">
+            orderedProducts.map((product, index) => (
+              <tr
+                className={`hover:bg-slate-900/50 ${
+                  allowReorder ? "transition-colors" : ""
+                }`}
+                key={product.id}
+                onDragOver={(event) => {
+                  if (allowReorder && !pending) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (allowReorder) handleDrop(event, index);
+                }}
+              >
+                <td className="px-4 py-3.5">
                     <input
                       aria-label={`Seleccionar ${product.name}`}
                       checked={selectedIds.includes(product.id)}
@@ -268,6 +360,44 @@ export function ProductCatalogTable({
                       type="checkbox"
                     />
                   </td>
+                  {allowReorder ? (
+                    <td className="px-2 py-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          aria-label={`Arrastrar ${product.name}`}
+                          className="cursor-grab rounded px-2 py-1 text-cyan-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-cyan-400 active:cursor-grabbing disabled:opacity-50"
+                          disabled={pending}
+                          draggable={!pending}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", product.id);
+                          }}
+                          title="Arrastrar para reordenar"
+                          type="button"
+                        >
+                          ⋮⋮
+                        </button>
+                        <button
+                          aria-label={`Subir ${product.name}`}
+                          className="rounded px-1.5 py-1 text-xs text-slate-400 hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400 disabled:opacity-40"
+                          disabled={pending || index === 0}
+                          onClick={() => moveProduct(product.id, index - 1)}
+                          type="button"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          aria-label={`Bajar ${product.name}`}
+                          className="rounded px-1.5 py-1 text-xs text-slate-400 hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400 disabled:opacity-40"
+                          disabled={pending || index === orderedProducts.length - 1}
+                          onClick={() => moveProduct(product.id, index + 1)}
+                          type="button"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
                   <td className="px-4 py-3.5 font-mono text-xs text-slate-200">
                     {product.sku}
                   </td>

@@ -6,6 +6,9 @@ import {
   bulkProductMutationInputSchema,
   mutateProducts,
   ProductMutationError,
+  reorderProductInputSchema,
+  reorderProducts,
+  StaleProductOrderError,
   type ProductMutationRecord,
   type ProductMutationRepository,
   type ProductValueUpdate,
@@ -23,6 +26,7 @@ function activeProduct(
     deletedAt: null,
     price: new Prisma.Decimal("10.00"),
     stock: 10,
+    sortOrder: 0,
     ...values,
   };
 }
@@ -40,6 +44,16 @@ function createMemoryRepository(
         const product = products.get(id);
         return product ? [product] : [];
       });
+    },
+    async findActivePage(page, pageSize) {
+      return [...products.values()]
+        .filter(({ deletedAt }) => deletedAt === null)
+        .sort(
+          (left, right) =>
+            left.sortOrder - right.sortOrder || left.id.localeCompare(right.id),
+        )
+        .slice((page - 1) * pageSize, page * pageSize)
+        .map(({ id }) => id);
     },
     async softDelete(ids, deletedAt) {
       let count = 0;
@@ -60,6 +74,14 @@ function createMemoryRepository(
         const product = products.get(update.id);
         assert.ok(product);
         products.set(update.id, { ...product, ...update });
+      }
+      return updates.length;
+    },
+    async updatePositions(updates) {
+      for (const update of updates) {
+        const product = products.get(update.id);
+        assert.ok(product);
+        products.set(update.id, { ...product, sortOrder: update.sortOrder });
       }
       return updates.length;
     },
@@ -250,4 +272,97 @@ test("rejects missing and soft-deleted product IDs", async () => {
     mutateProducts(repository, deletedOnly, new Date()),
     /ya están eliminados/,
   );
+});
+
+test("rejects empty, one-item, and duplicate product order lists", () => {
+  const base = { expectedIds: [productA, productB], page: 1, pageSize: 20 };
+  assert.equal(
+    reorderProductInputSchema.safeParse({ ...base, ids: [] }).success,
+    false,
+  );
+  assert.equal(
+    reorderProductInputSchema.safeParse({
+      ...base,
+      ids: [productA],
+      expectedIds: [productA],
+    }).success,
+    false,
+  );
+  assert.equal(
+    reorderProductInputSchema.safeParse({
+      ...base,
+      ids: [productA, productA],
+    }).success,
+    false,
+  );
+});
+
+test("rejects reorder requests with more than 50 product IDs", () => {
+  const ids = Array.from({ length: 51 }, (_, index) => {
+    const suffix = String(index + 1).padStart(12, "0");
+    return `00000000-0000-4000-8000-${suffix}`;
+  });
+
+  assert.equal(
+    reorderProductInputSchema.safeParse({
+      ids,
+      expectedIds: ids,
+      page: 1,
+      pageSize: 50,
+    }).success,
+    false,
+  );
+});
+
+test("reorders products while preserving their current position slots", async () => {
+  const { repository, products } = createMemoryRepository([
+    activeProduct(productA, { sortOrder: 100 }),
+    activeProduct(productB, { sortOrder: 200 }),
+  ]);
+
+  await reorderProducts(repository, {
+    ids: [productB, productA],
+    expectedIds: [productA, productB],
+    page: 1,
+    pageSize: 20,
+  });
+
+  assert.equal(products.get(productB)?.sortOrder, 100);
+  assert.equal(products.get(productA)?.sortOrder, 200);
+});
+
+test("rejects a reorder containing a missing ID before changing positions", async () => {
+  const { repository, products } = createMemoryRepository([
+    activeProduct(productA, { sortOrder: 100 }),
+  ]);
+
+  await assert.rejects(
+    reorderProducts(repository, {
+      ids: [productA, productB],
+      expectedIds: [productA, productB],
+      page: 1,
+      pageSize: 20,
+    }),
+    ProductMutationError,
+  );
+  assert.equal(products.get(productA)?.sortOrder, 100);
+});
+
+test("rejects a stale page snapshot before changing any positions", async () => {
+  const { repository, products } = createMemoryRepository([
+    activeProduct(productA, { sortOrder: 100 }),
+    activeProduct(productB, { sortOrder: 200 }),
+  ]);
+
+  await assert.rejects(
+    reorderProducts(repository, {
+      ids: [productB, productA],
+      expectedIds: [productB, productA],
+      page: 1,
+      pageSize: 20,
+    }),
+    StaleProductOrderError,
+  );
+  assert.equal(products.get(productA)?.sortOrder, 100);
+  assert.equal(products.get(productB)?.sortOrder, 200);
 });

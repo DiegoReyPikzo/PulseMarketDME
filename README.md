@@ -163,6 +163,24 @@ Sales and product prices are shown as stored decimal strings without assigning
 a currency. Sales rows include the existing related customer summary and do
 not fetch sale items.
 
+## Product catalog ordering
+
+Products can be persistently reordered on `/dashboard/products` by selecting
+“Posición personalizada” in ascending order. Reordering is enabled only when
+search/category filters are clear and the page size is at most 50. Drag rows by
+the handle, or use the accessible Subir/Bajar controls. The visible page is
+reordered optimistically and saved atomically; a failed save restores its
+previous order. Product positions are initialized deterministically by the
+additive migration and the reproducible seed.
+
+Each reorder request includes the page number, page size, and original ordered
+IDs observed by the browser. The server compares that snapshot with the current
+database page inside the serializable transaction. Stale-page submissions are
+rejected with a reload-and-retry message; concurrent serializable transaction
+conflicts return the same recovery guidance. Only the positions already
+occupied by IDs on the submitted page are reassigned, so other pages retain
+their positions.
+
 ## Product catalog mutations
 
 Authenticated users can soft-delete a product or apply a bulk catalog change

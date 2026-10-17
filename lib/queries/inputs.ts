@@ -11,7 +11,9 @@ export const productListInputSchema = z
     ...pageFields,
     search: searchField,
     category: z.string().trim().min(1).max(100).optional(),
-    sortBy: z.enum(["name", "sku", "price", "createdAt"]).default("createdAt"),
+    sortBy: z
+      .enum(["name", "sku", "price", "createdAt", "sortOrder"])
+      .default("createdAt"),
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   })
   .strict();

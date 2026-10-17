@@ -53,6 +53,12 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
 
   const input = parsed.data;
   const result = await listProducts(input);
+  const allowReorder =
+    !input.search &&
+    !input.category &&
+    input.sortBy === "sortOrder" &&
+    input.sortOrder === "asc" &&
+    input.pageSize <= 50;
   const pageValues = {
     search: input.search,
     category: input.category,
@@ -67,8 +73,17 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
         title="Productos"
       />
       <ProductFilters values={input} />
+      {input.sortBy === "sortOrder" && !allowReorder ? (
+        <p className="mt-3 text-sm text-amber-300" role="status">
+          Para reordenar, quita los filtros, elige orden ascendente y usa un
+          tamaño de página de hasta 50 productos.
+        </p>
+      ) : null}
       <ProductCatalogTable
+        allowReorder={allowReorder}
         key={result.items.map(({ id }) => id).join("|")}
+        page={input.page}
+        pageSize={input.pageSize}
         products={result.items}
       />
       <ListingPagination
@@ -104,6 +119,7 @@ function ProductFilters({
           ["name", "Nombre"],
           ["sku", "SKU"],
           ["price", "Precio"],
+          ["sortOrder", "Posición personalizada"],
         ]}
         sortOrder={stringValue(values.sortOrder, "desc")}
       />

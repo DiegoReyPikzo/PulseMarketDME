@@ -53,6 +53,7 @@ const products: Prisma.ProductCreateManyInput[] = Array.from(
       category: categories[offset % categories.length],
       price: decimalFromCents(499 + index * 137),
       stock: (index * 17) % 250,
+      sortOrder: offset,
       seedKey: seedKeyFor("product", index),
     };
   },

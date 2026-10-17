@@ -47,6 +47,19 @@ test("accepts URL strings and converts page controls to numbers", () => {
   });
 });
 
+test("accepts product position as an allowed URL sort field", () => {
+  const result = parseListSearchParams(productListInputSchema, {
+    sortBy: "sortOrder",
+    sortOrder: "asc",
+  });
+
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.sortBy, "sortOrder");
+    assert.equal(result.data.sortOrder, "asc");
+  }
+});
+
 test("rejects repeated URL parameters clearly", () => {
   const result = parseListSearchParams(productListInputSchema, {
     search: ["one", "two"],

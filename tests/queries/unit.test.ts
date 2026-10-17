@@ -133,11 +133,19 @@ test("adds unique ID tie-breakers to every allowed sort", () => {
     sortBy: "price",
     sortOrder: "asc",
   });
+  const productPositionInput = productListInputSchema.parse({
+    sortBy: "sortOrder",
+    sortOrder: "asc",
+  });
   const customerInput = customerListInputSchema.parse({ sortBy: "email" });
   const saleInput = saleListInputSchema.parse({ sortBy: "total" });
 
   assert.deepEqual(buildProductOrderBy(productInput), [
     { price: "asc" },
+    { id: "asc" },
+  ]);
+  assert.deepEqual(buildProductOrderBy(productPositionInput), [
+    { sortOrder: "asc" },
     { id: "asc" },
   ]);
   assert.deepEqual(buildCustomerOrderBy(customerInput), [

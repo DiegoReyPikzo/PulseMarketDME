@@ -12,6 +12,41 @@ const productIdsSchema = z
     message: "La selección contiene IDs duplicados.",
   });
 
+const reorderIdsSchema = z
+  .array(z.uuid())
+  .min(2, "Selecciona al menos dos productos para reordenar.")
+  .max(50, "Puedes reordenar hasta 50 productos por operación.")
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: "La lista contiene IDs duplicados.",
+  });
+
+export const reorderProductInputSchema = z
+  .object({
+    ids: reorderIdsSchema,
+    expectedIds: reorderIdsSchema,
+    page: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(Math.floor(Number.MAX_SAFE_INTEGER / 50)),
+    pageSize: z.coerce.number().int().refine((value) => value === 20 || value === 50),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if (
+      input.ids.length !== input.expectedIds.length ||
+      input.ids.some((id) => !input.expectedIds.includes(id))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ids"],
+        message: "El orden nuevo debe contener exactamente los productos de la página actual.",
+      });
+    }
+  });
+
+export type ReorderProductInput = z.infer<typeof reorderProductInputSchema>;
+
 const adjustmentAmountSchema = z
   .string()
   .trim()
@@ -87,6 +122,7 @@ export type ProductMutationRecord = {
   deletedAt: Date | null;
   price: Prisma.Decimal;
   stock: number;
+  sortOrder: number;
 };
 
 export type ProductValueUpdate = {
@@ -97,15 +133,26 @@ export type ProductValueUpdate = {
 
 export interface ProductMutationRepository {
   findByIds(ids: readonly string[]): Promise<ProductMutationRecord[]>;
+  findActivePage(page: number, pageSize: number): Promise<string[]>;
   softDelete(ids: readonly string[], deletedAt: Date): Promise<number>;
   setCategory(ids: readonly string[], category: string): Promise<number>;
   updateValues(updates: readonly ProductValueUpdate[]): Promise<number>;
+  updatePositions(updates: readonly { id: string; sortOrder: number }[]): Promise<number>;
 }
 
 export class ProductMutationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ProductMutationError";
+  }
+}
+
+export class StaleProductOrderError extends ProductMutationError {
+  constructor() {
+    super(
+      "El orden de esta página cambió desde que la abriste. Se restauró el orden anterior; recarga la página e inténtalo de nuevo.",
+    );
+    this.name = "StaleProductOrderError";
   }
 }
 
@@ -116,8 +163,24 @@ export function createProductMutationRepository(
     findByIds: (ids) =>
       transaction.product.findMany({
         where: { id: { in: [...ids] } },
-        select: { id: true, deletedAt: true, price: true, stock: true },
+        select: {
+          id: true,
+          deletedAt: true,
+          price: true,
+          stock: true,
+          sortOrder: true,
+        },
       }),
+    findActivePage: async (page, pageSize) => {
+      const products = await transaction.product.findMany({
+        where: { deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true },
+      });
+      return products.map(({ id }) => id);
+    },
     softDelete: async (ids, deletedAt) => {
       const result = await transaction.product.updateMany({
         where: { id: { in: [...ids] }, deletedAt: null },
@@ -143,7 +206,47 @@ export function createProductMutationRepository(
       );
       return results.reduce((count, result) => count + result.count, 0);
     },
+    updatePositions: async (updates) => {
+      let count = 0;
+      for (const { id, sortOrder } of updates) {
+        const result = await transaction.product.updateMany({
+          where: { id, deletedAt: null },
+          data: { sortOrder },
+        });
+        count += result.count;
+      }
+      return count;
+    },
   };
+}
+
+export async function reorderProducts(
+  repository: ProductMutationRepository,
+  input: ReorderProductInput,
+): Promise<void> {
+  const parsed = reorderProductInputSchema.parse(input);
+  const currentPageIds = await repository.findActivePage(
+    parsed.page,
+    parsed.pageSize,
+  );
+  if (
+    currentPageIds.length !== parsed.expectedIds.length ||
+    currentPageIds.some((id, index) => id !== parsed.expectedIds[index])
+  ) {
+    throw new StaleProductOrderError();
+  }
+
+  const products = await assertProductsAreActive(repository, parsed.ids);
+  const positions = products
+    .map((product) => product.sortOrder)
+    .sort((left, right) => left - right);
+  const updates = parsed.ids.map((id, index) => ({
+    id,
+    sortOrder: positions[index],
+  }));
+
+  const count = await repository.updatePositions(updates);
+  assertUpdatedCount(count, parsed.ids.length);
 }
 
 export async function softDeleteProduct(

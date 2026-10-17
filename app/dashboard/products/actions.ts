@@ -8,10 +8,14 @@ import {
   deleteProductInputSchema,
   mutateProducts,
   ProductMutationError,
+  reorderProductInputSchema,
+  reorderProducts,
   softDeleteProduct,
+  StaleProductOrderError,
 } from "../../../lib/catalog-mutations";
 import { getAuthenticatedSession } from "../../../lib/auth-session";
 import { prisma } from "../../../lib/prisma";
+import { Prisma } from "../../../generated/prisma/client";
 
 export type ProductMutationActionState =
   | { status: "success"; message: string }
@@ -106,6 +110,80 @@ export async function bulkMutateProductsAction(
         ? `Se eliminaron ${count} productos del catálogo.`
         : `Se actualizaron ${count} productos.`,
   };
+}
+
+export async function reorderProductsAction(
+  formData: FormData,
+): Promise<ProductMutationActionState> {
+  await getAuthenticatedSession();
+
+  const entries = [...formData.entries()];
+  const entryNames = entries.map(([name]) => name);
+  const requiredNames = ["productIds", "expectedProductIds", "page", "pageSize"];
+  if (
+    entries.length !== requiredNames.length ||
+    requiredNames.some((name) => !entryNames.includes(name)) ||
+    new Set(entryNames).size !== entryNames.length
+  ) {
+    return { status: "error", message: "La lista de productos no es válida." };
+  }
+  const fields = Object.fromEntries(entries);
+  if (
+    typeof fields.productIds !== "string" ||
+    typeof fields.expectedProductIds !== "string" ||
+    typeof fields.page !== "string" ||
+    typeof fields.pageSize !== "string"
+  ) {
+    return { status: "error", message: "La lista de productos no es válida." };
+  }
+
+  let ids: unknown;
+  let expectedIds: unknown;
+  try {
+    ids = JSON.parse(fields.productIds);
+    expectedIds = JSON.parse(fields.expectedProductIds);
+  } catch {
+    return { status: "error", message: "La lista de productos no es válida." };
+  }
+
+  const parsed = reorderProductInputSchema.safeParse({
+    ids,
+    expectedIds,
+    page: fields.page,
+    pageSize: fields.pageSize,
+  });
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues.map((issue) => issue.message).join(" "),
+    };
+  }
+
+  try {
+    await prisma.$transaction(
+      (transaction) =>
+        reorderProducts(createProductMutationRepository(transaction), parsed.data),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error: unknown) {
+    if (error instanceof StaleProductOrderError) {
+      return { status: "error", message: error.message };
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      return {
+        status: "error",
+        message:
+          "Otro reordenamiento ocurrió al mismo tiempo. Se restauró el orden anterior; recarga la página e inténtalo de nuevo.",
+      };
+    }
+    return mutationErrorState(error, "No se pudo guardar el nuevo orden.");
+  }
+
+  revalidatePath("/dashboard/products");
+  return { status: "success", message: "Nuevo orden guardado." };
 }
 
 function mutationErrorState(

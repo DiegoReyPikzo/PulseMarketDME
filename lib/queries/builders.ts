@@ -42,6 +42,8 @@ export function buildProductOrderBy(
       return [{ price: input.sortOrder }, tieBreaker];
     case "createdAt":
       return [{ createdAt: input.sortOrder }, tieBreaker];
+    case "sortOrder":
+      return [{ sortOrder: input.sortOrder }, tieBreaker];
   }
 }
 
