@@ -16,7 +16,7 @@ import {
   SelectFilter,
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
-import { WingedPiggybank } from "../../components/loading/winged-piggybank";
+import { CustomersFallback } from "../../components/loading/data-fallbacks";
 import { CustomerCreationForm } from "./customer-creation-form";
 import { CustomerDirectory } from "./customer-directory";
 
@@ -173,9 +173,7 @@ function stringValue(value: string | string[] | undefined): string {
 export default function CustomersPage({ searchParams }: CustomersPageProps) {
   return (
     <Suspense
-      fallback={
-        <WingedPiggybank layout="page" message="Preparando tus clientes..." />
-      }
+      fallback={<CustomersFallback />}
     >
       <CustomersListing searchParams={searchParams} />
     </Suspense>

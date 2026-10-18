@@ -18,7 +18,7 @@ import {
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
 import { ListingTable, TableCell } from "../listing-table";
-import { WingedPiggybank } from "../../components/loading/winged-piggybank";
+import { SalesFallback } from "../../components/loading/data-fallbacks";
 
 type SalesPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -231,9 +231,7 @@ function dateValue(value: string | string[] | undefined): string {
 export default function SalesPage({ searchParams }: SalesPageProps) {
   return (
     <Suspense
-      fallback={
-        <WingedPiggybank layout="page" message="Preparando tus ventas..." />
-      }
+      fallback={<SalesFallback />}
     >
       <SalesListing searchParams={searchParams} />
     </Suspense>

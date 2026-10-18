@@ -6,7 +6,7 @@ import { parseDashboardAnalyticsRange } from "../../lib/analytics/range";
 import { getAuthenticatedSession } from "../../lib/auth-session";
 import type { DashboardSearchParams } from "../../lib/dashboard/list-params";
 import { DashboardShell } from "./dashboard-shell";
-import { WingedPiggybank } from "../components/loading/winged-piggybank";
+import { SummaryFallback } from "../components/loading/data-fallbacks";
 import { DashboardAnalyticsClient } from "./analytics-client";
 
 type DashboardPageProps = {
@@ -116,9 +116,7 @@ function DateRangeForm({ from, to }: { from: string; to: string }) {
 export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
     <Suspense
-      fallback={
-        <WingedPiggybank layout="page" message="Preparando tu resumen..." />
-      }
+      fallback={<SummaryFallback />}
     >
       <DashboardSummary searchParams={searchParams} />
     </Suspense>
