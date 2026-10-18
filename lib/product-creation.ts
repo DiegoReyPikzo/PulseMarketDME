@@ -1,50 +1,12 @@
 import "server-only";
 
-import { z } from "zod";
+import type { z } from "zod";
 import { Prisma, type Prisma as PrismaTypes } from "../generated/prisma/client";
+import { productValuesSchema } from "./validation/product";
 
-const MAXIMUM_STOCK = 2_147_483_647;
 const MAXIMUM_SORT_ORDER = 2_147_483_647;
 
-export const createProductInputSchema = z.object({
-  sku: z.string().trim().min(1, "El SKU es obligatorio.").max(64, "El SKU admite hasta 64 caracteres."),
-  name: z.string().trim().min(1, "El nombre es obligatorio.").max(160, "El nombre admite hasta 160 caracteres."),
-  description: z
-    .string()
-    .optional()
-    .default("")
-    .transform((value) => (value.trim().length === 0 ? null : value)),
-  category: z
-    .string()
-    .trim()
-    .min(1, "La categoría es obligatoria.")
-    .max(100, "La categoría admite hasta 100 caracteres."),
-  price: z
-    .string()
-    .trim()
-    .regex(
-      /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/,
-      "Ingresa un precio no negativo con hasta dos decimales y dentro del límite permitido.",
-    ),
-  stock: z
-    .string()
-    .trim()
-    .optional()
-    .default("0")
-    .transform((value) => (value.length === 0 ? "0" : value))
-    .pipe(
-      z
-        .string()
-        .regex(
-          /^(?:0|[1-9]\d{0,9})$/,
-          "El stock debe ser un entero no negativo.",
-        )
-        .refine(
-          (value) => Number(value) <= MAXIMUM_STOCK,
-          "El stock no puede superar 2147483647.",
-        ),
-    ),
-}).strict();
+export const createProductInputSchema = productValuesSchema;
 
 export type CreateProductInput = z.infer<typeof createProductInputSchema>;
 

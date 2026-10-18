@@ -232,7 +232,7 @@ test("rejects a duplicate SKU accessibly, retains input values, and creates no d
   expect(matches.rows[0]?.id).toBe(original?.id);
 });
 
-test("rejects excess price decimals through the server action", async ({ page }) => {
+test("rejects excess price decimals and creates no product", async ({ page }) => {
   await openProductCatalog(page);
   await fillProductForm(page, fixtureSkus.invalid, "1.001");
   await submitProductForm(page);
