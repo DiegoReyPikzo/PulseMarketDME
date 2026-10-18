@@ -49,6 +49,7 @@ export function serializeSale(sale: SaleRow) {
       id: sale.customer.id,
       name: sale.customer.name,
       email: sale.customer.email,
+      deleted: sale.customer.deletedAt !== null,
     },
   };
 }

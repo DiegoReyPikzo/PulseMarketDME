@@ -31,6 +31,7 @@ export const saleListSelect = {
       id: true,
       name: true,
       email: true,
+      deletedAt: true,
     },
   },
 } satisfies Prisma.SaleSelect;

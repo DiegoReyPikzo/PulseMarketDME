@@ -38,13 +38,19 @@ model Customer {
   id        String   @id @default(uuid()) @db.Uuid
   name      String   @db.VarChar(160)
   email     String   @unique @db.VarChar(254)
-  phone     String?  @db.VarChar(32)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
-  seedKey   String?  @unique @db.VarChar(100)
+  phone     String?   @db.VarChar(32)
+  deletedAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  seedKey   String?   @unique @db.VarChar(100)
   sales     Sale[]
 
+  // Migration 20261017200000_add_customer_soft_delete also adds the manual
+  // CHECK "Customer_email_normalized_check" (email = lower(btrim(email))),
+  // which Prisma cannot represent here. With the UNIQUE email index it makes
+  // email uniqueness case-insensitive in PostgreSQL.
   @@index([createdAt(sort: Desc)])
+  @@index([deletedAt, createdAt(sort: Desc)])
 }
 
 model Sale {

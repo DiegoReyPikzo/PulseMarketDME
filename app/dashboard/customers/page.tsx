@@ -17,7 +17,8 @@ import {
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
 import { WingedPiggybank } from "../../components/loading/winged-piggybank";
-import { ListingTable, TableCell } from "../listing-table";
+import { CustomerCreationForm } from "./customer-creation-form";
+import { CustomerDirectory } from "./customer-directory";
 
 type CustomersPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -33,6 +34,7 @@ async function CustomersListing({ searchParams }: CustomersPageProps) {
     return (
       <DashboardShell session={session} activePath="/dashboard/customers">
         <Heading />
+        <CustomerCreationForm />
         <InvalidParams message={parsed.message} />
         <CustomerFilters
           pageSize="20"
@@ -50,33 +52,22 @@ async function CustomersListing({ searchParams }: CustomersPageProps) {
   return (
     <DashboardShell session={session} activePath="/dashboard/customers">
       <Heading />
+      <CustomerCreationForm />
       <CustomerFilters
         pageSize={String(input.pageSize)}
         search={input.search ?? ""}
         sortBy={input.sortBy}
         sortOrder={input.sortOrder}
       />
-      <ListingTable
-        caption="Resultados de clientes"
-        columns={[
-          { label: "Nombre" },
-          { label: "Correo electrónico" },
-          { label: "Teléfono" },
-          { label: "Creado" },
-        ]}
-        empty={result.items.length === 0}
-      >
-        {result.items.map((customer) => (
-          <tr className="dashboard-listing__row" key={customer.id}>
-            <TableCell>{customer.name}</TableCell>
-            <TableCell>{customer.email}</TableCell>
-            <TableCell>{customer.phone ?? "—"}</TableCell>
-            <TableCell mono>
-              {new Date(customer.createdAt).toLocaleDateString("es")}
-            </TableCell>
-          </tr>
-        ))}
-      </ListingTable>
+      <CustomerDirectory
+        customers={result.items.map((customer) => ({
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          createdAtLabel: new Date(customer.createdAt).toLocaleDateString("es"),
+        }))}
+      />
       <ListingPagination
         page={input.page}
         pageSize={input.pageSize}
@@ -150,7 +141,8 @@ function Heading() {
         Clientes
       </h1>
       <p className="dashboard-page-heading__copy text-sm">
-        Busca y ordena clientes por sus datos registrados.
+        Crea, edita y busca clientes activos. Los clientes eliminados se
+        conservan en el historial de ventas.
       </p>
     </header>
   );

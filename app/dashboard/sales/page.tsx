@@ -77,7 +77,14 @@ async function SalesListing({ searchParams }: SalesPageProps) {
             <TableCell mono>
               {new Date(sale.saleDate).toLocaleString("es")}
             </TableCell>
-            <TableCell>{sale.customer.name}</TableCell>
+            <TableCell>
+              {sale.customer.name}
+              {sale.customer.deleted ? (
+                <span className="dashboard-listing__warning ml-2 inline-block rounded px-1.5 py-0.5 text-xs">
+                  Cliente eliminado
+                </span>
+              ) : null}
+            </TableCell>
             <TableCell>{sale.customer.email}</TableCell>
             <TableCell>{sale.status}</TableCell>
             <TableCell mono numeric>
