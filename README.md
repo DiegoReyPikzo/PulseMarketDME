@@ -8,7 +8,8 @@ PulseMarket uses PostgreSQL through Prisma ORM 7. The schema defines:
   (`Decimal(12,2)`), stock, timestamps, and nullable `deletedAt` for soft
   deletion. Catalog indexes support active/deleted filtering with recent-first
   ordering and category/name lookups.
-- `Customer`: name, unique email, optional phone, and timestamps.
+- `Customer`: name, unique normalized email, optional phone, timestamps, and
+  nullable `deletedAt` for soft deletion (see Customer management).
 - `Sale`: required customer relation, status, sale date, and `Decimal(14,2)`
   total. Customer/date and date indexes support sales history queries.
 - `SaleItem`: required sale and product relations, quantity, historical
@@ -58,14 +59,17 @@ Supported filters:
 - Products: case-insensitive `search` across name, SKU, and description;
   exact `category`. Soft-deleted products are excluded.
 - Customers: case-insensitive `search` across name, email, and phone.
+  Soft-deleted customers are excluded.
 - Sales: case-insensitive `search` against the related customer's name/email;
   exact `customerId` and `status`; inclusive ISO `from`/`to` sale-date bounds.
 
 Sorting uses `sortBy` and `sortOrder` (`asc` or `desc`): products allow
 `name`, `sku`, `price`, or `createdAt`; customers allow `name`, `email`, or
 `createdAt`; sales allow `saleDate`, `total`, or `createdAt`. Every ordering
-adds `id ASC` as a unique tie-breaker. Sales select the customer summary only,
-not sale items. Monetary Decimal values are serialized as fixed two-decimal
+adds `id ASC` as a unique tie-breaker. Sales select the customer summary only
+(including a `deleted` flag, not the deletion time), not sale items. Sales of
+soft-deleted customers remain in sales results, searches, and `customerId`
+filters. Monetary Decimal values are serialized as fixed two-decimal
 strings and dates as ISO strings. These uncached functions execute database
 page queries and matching counts.
 
@@ -294,6 +298,14 @@ token. A successful create revalidates and refreshes the current listing
 without changing its filters, sort, or page, so the new product may not appear
 in the current view.
 
+Known limitation (pending, independent of the customer work): the product
+creation and edit handlers recognize a SKU `UNIQUE` violation only through
+Prisma's `target` metadata. With `@prisma/adapter-pg` the violation is
+reported under `driverAdapterError.cause.constraint.index`, so two requests
+racing for the same SKU still persist only one product, but the losing
+request shows the generic error instead of the SKU field error. The
+non-racing duplicate case is caught earlier by the SKU lookup.
+
 Run the creation checks with:
 
 ```powershell
@@ -349,6 +361,130 @@ Unit tests mock persistence and action dependencies. Integration tests use
 PostgreSQL, create unique fixture products, and clean up only those fixture
 IDs. The serialization-conflict action test simulates Prisma `P2034`; it does
 not claim to exercise real concurrent transactions.
+
+## Customer management
+
+`/dashboard/customers` lets authorized users create customers, edit their
+name, email, and phone, and soft-delete them. Restoring deleted customers,
+bulk changes, and sale mutations are not available. The create, edit lookup,
+update, and delete Server Actions each verify the authorized session on the
+server before reading the form or the database. Submitted internal fields
+(`id`, `deletedAt`, timestamps, `seedKey`), unknown keys, and repeated keys
+are rejected.
+
+- Name: trimmed, required, up to 160 characters.
+- Email: trimmed, lowercased, valid email format, up to 254 characters.
+- Phone: optional, trimmed, blank stored as `NULL`, up to 32 characters of
+  digits, spaces, `+`, parentheses, hyphen, and period, with at least one
+  digit. This is a character check, not validation of a real phone number.
+
+Edits write only the fields that changed, conditioned on their original
+values; a concurrent change to an untouched field is kept and a concurrent
+change to an edited field is reported as a conflict with an option to reload.
+Soft-deleted customers cannot be edited. Soft deletion sets `deletedAt` only:
+the customer leaves the active directory, while their sales, sale items, and
+relations are not modified. Sales listings, searches, and the `customerId`
+filter keep including them and show “Cliente eliminado” next to the customer's
+unchanged name and email.
+
+### Email uniqueness
+
+Emails stay reserved after soft deletion. Case-insensitive uniqueness is
+enforced by PostgreSQL, not only by the application:
+
+- The migration `20261017200000_add_customer_soft_delete` adds the manual
+  constraint `Customer_email_normalized_check`,
+  `CHECK (email = lower(btrim(email)))`. Prisma cannot represent CHECK
+  constraints, so it lives only in the migration SQL; `schema.prisma` has a
+  comment pointing to it. Prisma's drift diff does not show it, so verify it
+  in `pg_constraint` (it must exist with `convalidated = true`).
+- With every stored email normalized, the existing `UNIQUE` index
+  `Customer_email_key` rejects duplicates that differ only in letter case,
+  atomically under concurrency, including emails held by soft-deleted rows.
+- The guarantee is exactly PostgreSQL `lower()` and `btrim()`. `btrim()` with
+  no characters argument removes ordinary spaces only, not every kind of
+  Unicode whitespace, and the CHECK does not validate email format. The
+  application additionally trims and validates format before writing.
+- The application maps a `UNIQUE` violation (including the
+  `@prisma/adapter-pg` metadata shape) to the “email in use” field error, so
+  concurrent creates or edits for the same email persist one row and report
+  the other as in use.
+
+The migration adds the nullable `deletedAt` column (existing customers stay
+active) and the `Customer_deletedAt_createdAt_idx` index, then adds and
+immediately validates the CHECK. Validation scans the table while holding a
+lock that blocks other access to `Customer`; existing rows are not
+normalized, so any stored email that is not already lowercase and trimmed
+makes the migration fail. To undo, dropping the CHECK and the index loses no
+data, but dropping `deletedAt` loses the record of which customers were
+deleted and when.
+
+#### Transactions and partial application
+
+The migration file contains no explicit `BEGIN`/`COMMIT`. PostgreSQL runs a
+multi-statement script sent as one simple-query message as a single implicit
+transaction: a probe on the isolated E2E database (session temp tables only)
+confirmed that when the last statement of such a script fails, the earlier
+`CREATE TABLE`, `CREATE INDEX`, and `ADD CONSTRAINT` statements are rolled
+back too. Whether Prisma Migrate sends this file as one message has **not**
+been verified, so atomicity is not assumed:
+
+- If it is sent as one message and the CHECK fails, nothing from the file
+  remains (no column, index, or constraint), and `_prisma_migrations` records
+  the migration as failed.
+- If statements were applied separately, a CHECK failure could leave
+  `deletedAt` and its index without the constraint.
+
+Detect either case with `prisma migrate status` (it reports the failed
+migration and later `migrate deploy` runs stop with `P3009`), the
+`_prisma_migrations` row (`finished_at IS NULL`, `logs`), and the catalog:
+`information_schema.columns` for `deletedAt`, `pg_indexes` for
+`Customer_deletedAt_createdAt_idx`, and `pg_constraint` for
+`Customer_email_normalized_check` with `convalidated`. Do not rerun the
+deployment or edit the migration. Repairing requires a separately approved
+plan: fix or normalize the offending data, remove any partially created
+objects (or complete them manually), then mark the migration with
+`prisma migrate resolve --rolled-back` (or `--applied` only after the schema
+fully matches the file) and deploy again. The applied migration must not be
+edited afterwards; its checksum is recorded, so a correction ships as a new
+migration.
+
+#### Compatibility and deployment order
+
+The schema change is additive. The code on `main` before this change never
+writes customers (only the seed does, with lowercase emails), reads customers
+with explicit field selections, and does not reference `deletedAt`, so it
+keeps working after the migration and the CHECK. The new code reads and
+writes `deletedAt`, so it must not run before the migration. Proposed order,
+none of which has been executed for Production:
+
+1. Approved read-only review of Production data: emails where
+   `email <> lower(btrim(email))`, duplicates by `lower(email)`, and the row
+   count of `Customer`.
+2. A verified backup or recovery point (for example a Neon branch or a
+   restore point) taken immediately before the migration.
+3. The approved migration (`npm.cmd run db:migrate:deploy` against the
+   Production direct connection) in an agreed window. The E2E run took about
+   4 seconds of wall time including CLI startup; that is neither the lock
+   duration nor an estimate for Production.
+4. Schema verification: `prisma migrate status`, the drift diff, and the
+   catalog check of the CHECK (`convalidated = true`), the column, and the
+   index.
+5. Only then merge and deploy the new code, followed by manual validation.
+
+Run the customer checks with:
+
+```powershell
+npm.cmd run test:customers:unit
+npm.cmd run test:customers:integration
+npm.cmd run e2e:customers
+```
+
+The integration checks write directly to PostgreSQL (bypassing application
+normalization) to confirm that the CHECK rejects uppercase and outer-space
+emails and that the `UNIQUE` index rejects duplicate and soft-deleted emails.
+They also race creates and edits for the same email deterministically and
+confirm that soft-deleting a customer leaves their sales unchanged.
 
 ## Dashboard summary and analytics
 
@@ -490,6 +626,17 @@ Each product suite uses one exact set of run-unique fixture SKUs (`ZERO`,
 `DUP`, `INVALID`; `DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`,
 `EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
 and the IDs the suite registered.
+
+Run customer browser tests with:
+
+```powershell
+npm.cmd run e2e:customers
+```
+
+The customer suite uses four run-unique emails
+(`pme2e-<run>-cust-a|b|c|r@example.test`). Its cleanup verifies the isolated
+target, removes item-less sales it created for those customers (failing
+instead if any sale item exists), then removes only those customers.
 
 The runner validates the explicit E2E environment and completes the
 read-only database preflight before starting either test service. It starts

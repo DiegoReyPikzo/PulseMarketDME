@@ -22,6 +22,8 @@
     "test:product-creation:integration": "node --conditions=react-server --import tsx --test tests/product-creation/integration.test.ts",
     "test:product-update:unit": "node --conditions=react-server --import tsx --test tests/product-update/unit.test.ts",
     "test:product-update:integration": "node --conditions=react-server --import tsx --test tests/product-update/integration.test.ts",
+    "test:customers:unit": "node --conditions=react-server --import tsx --test tests/customer-mutations/unit.test.ts",
+    "test:customers:integration": "node --conditions=react-server --import tsx --test tests/customer-mutations/integration.test.ts",
     "db:benchmark": "node --conditions=react-server --import tsx scripts/benchmark-queries.ts",
     "db:analytics-benchmark": "node --conditions=react-server --import tsx scripts/benchmark-analytics.ts",
     "e2e:config:test": "node --conditions=react-server --import tsx --test tests/e2e/environment.test.ts tests/e2e/oauth-provider.test.ts",
@@ -31,7 +33,8 @@
     "e2e:google-request": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --google-denial",
     "e2e:products": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --products",
     "e2e:reorder": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --reorder",
-    "e2e:product-edit": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --product-edit"
+    "e2e:product-edit": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --product-edit",
+    "e2e:customers": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --customers"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

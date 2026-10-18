@@ -57,6 +57,7 @@ jobs:
           npm run test:analytics:unit
           npm run test:product-creation:unit
           npm run test:product-update:unit
+          npm run test:customers:unit
 
       - name: Test E2E configuration
         run: npm run e2e:config:test
@@ -118,14 +119,16 @@ jobs:
           npm run e2e:with-env -- npm run test:analytics:integration
           npm run e2e:with-env -- npm run test:product-creation:integration
           npm run e2e:with-env -- npm run test:product-update:integration
+          npm run e2e:with-env -- npm run test:customers:integration
 
-      - name: Test isolated OAuth, products, reorder, and product edit flows
+      - name: Test isolated OAuth, products, reorder, product edit, and customer flows
         run: |
           npm run e2e:auth
           npm run e2e:google-request
           npm run e2e:products
           npm run e2e:reorder
           npm run e2e:product-edit
+          npm run e2e:customers
 
       - name: Verify E2E database fixture cleanup
         if: always() && steps.prepare_e2e.outputs.ready == 'true'

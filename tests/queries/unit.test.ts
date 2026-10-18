@@ -93,11 +93,15 @@ test("builds customer search across existing searchable fields", () => {
   const input = customerListInputSchema.parse({ search: "alex" });
 
   assert.deepEqual(buildCustomerWhere(input), {
+    deletedAt: null,
     OR: [
       { name: { contains: "alex", mode: "insensitive" } },
       { email: { contains: "alex", mode: "insensitive" } },
       { phone: { contains: "alex", mode: "insensitive" } },
     ],
+  });
+  assert.deepEqual(buildCustomerWhere(customerListInputSchema.parse({})), {
+    deletedAt: null,
   });
 });
 
@@ -196,6 +200,7 @@ test("serializes sale totals and date while including only selected customer dat
       id: "customer-id",
       name: "Customer",
       email: "customer@example.test",
+      deletedAt: null,
     },
   });
 
@@ -205,5 +210,27 @@ test("serializes sale totals and date while including only selected customer dat
     id: "customer-id",
     name: "Customer",
     email: "customer@example.test",
+    deleted: false,
+  });
+
+  const deletedCustomerSale = serializeSale({
+    id: "sale-id",
+    customerId: "customer-id",
+    status: "COMPLETED",
+    saleDate: new Date("2026-01-01T00:00:00.000Z"),
+    total: new Prisma.Decimal("1.00"),
+    customer: {
+      id: "customer-id",
+      name: "Customer",
+      email: "customer@example.test",
+      deletedAt: new Date("2026-02-01T00:00:00.000Z"),
+    },
+  });
+  // The flag is exposed, the deletion timestamp is not; name and email stay.
+  assert.deepEqual(deletedCustomerSale.customer, {
+    id: "customer-id",
+    name: "Customer",
+    email: "customer@example.test",
+    deleted: true,
   });
 });

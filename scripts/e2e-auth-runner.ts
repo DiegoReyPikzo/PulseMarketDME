@@ -190,11 +190,13 @@ async function main(): Promise<void> {
     .slice(2)
     .includes("--google-denial");
   const productEditSuite = process.argv.slice(2).includes("--product-edit");
+  const customerSuite = process.argv.slice(2).includes("--customers");
   if (
     Number(productSuite) +
       Number(reorderSuite) +
       Number(googleDenialSuite) +
-      Number(productEditSuite) >
+      Number(productEditSuite) +
+      Number(customerSuite) >
     1
   ) {
     throw new Error("Choose one E2E suite per runner invocation.");
@@ -207,7 +209,8 @@ async function main(): Promise<void> {
         argument !== "--products" &&
         argument !== "--reorder" &&
         argument !== "--google-denial" &&
-        argument !== "--product-edit",
+        argument !== "--product-edit" &&
+        argument !== "--customers",
     );
   const baseEnvironment: NodeJS.ProcessEnv = {
     ...createE2eChildEnvironment(configuration),
@@ -245,6 +248,13 @@ async function main(): Promise<void> {
   const productRegistry = resolve(
     ".playwright-e2e",
     `product-fixtures-${productRunId}.json`,
+  );
+  const customerEmails = ["a", "b", "c", "r"].map(
+    (suffix) => `pme2e-${productRunId}-cust-${suffix}@example.test`,
+  );
+  const customerRegistry = resolve(
+    ".playwright-e2e",
+    `customer-fixtures-${productRunId}.json`,
   );
   const runId = randomBytes(32).toString("base64url");
   const nextAuthSecret = randomBytes(32).toString("base64url");
@@ -301,6 +311,8 @@ async function main(): Promise<void> {
             ? "tests/e2e/browser/product-reorder.spec.ts"
             : productEditSuite
               ? "tests/e2e/browser/product-edit.spec.ts"
+              : customerSuite
+              ? "tests/e2e/browser/customers.spec.ts"
               : googleDenialSuite
               ? "tests/e2e/browser/google-access-request.spec.ts"
               : "tests/e2e/browser/auth.spec.ts",
@@ -314,6 +326,8 @@ async function main(): Promise<void> {
       PULSEMARKET_E2E_DISCLOSURE_TEST_SECRET: nextAuthSecret,
       PULSEMARKET_E2E_PRODUCT_SKUS: JSON.stringify(productSkus),
       PULSEMARKET_E2E_PRODUCT_REGISTRY: productRegistry,
+      PULSEMARKET_E2E_CUSTOMER_EMAILS: JSON.stringify(customerEmails),
+      PULSEMARKET_E2E_CUSTOMER_REGISTRY: customerRegistry,
     };
     for (const key of [
       "NEXTAUTH_URL",
@@ -353,6 +367,30 @@ async function main(): Promise<void> {
           resolve("scripts/e2e-cleanup-products.ts"),
         ],
         fixtureEnvironment,
+      );
+      if (cleanupCode !== 0) process.exitCode = 1;
+
+      const postflightCode = await runChild(
+        process.execPath,
+        ["--import", "tsx", resolve("scripts/e2e-preflight.ts")],
+        baseEnvironment,
+      );
+      if (postflightCode !== 0) process.exitCode = 1;
+    }
+    if (customerSuite) {
+      const cleanupCode = await runChild(
+        process.execPath,
+        [
+          "--conditions=react-server",
+          "--import",
+          "tsx",
+          resolve("scripts/e2e-cleanup-customers.ts"),
+        ],
+        {
+          ...baseEnvironment,
+          PULSEMARKET_E2E_CUSTOMER_EMAILS: JSON.stringify(customerEmails),
+          PULSEMARKET_E2E_CUSTOMER_REGISTRY: customerRegistry,
+        },
       );
       if (cleanupCode !== 0) process.exitCode = 1;
 

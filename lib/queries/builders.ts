@@ -47,18 +47,23 @@ export function buildProductOrderBy(
   }
 }
 
+// The customer directory lists active customers only. Sales filters do not use
+// this builder, so sales of soft-deleted customers stay searchable.
 export function buildCustomerWhere(
   input: CustomerListInput,
 ): Prisma.CustomerWhereInput {
-  return input.search
-    ? {
-        OR: [
-          { name: { contains: input.search, mode: "insensitive" } },
-          { email: { contains: input.search, mode: "insensitive" } },
-          { phone: { contains: input.search, mode: "insensitive" } },
-        ],
-      }
-    : {};
+  return {
+    deletedAt: null,
+    ...(input.search
+      ? {
+          OR: [
+            { name: { contains: input.search, mode: "insensitive" } },
+            { email: { contains: input.search, mode: "insensitive" } },
+            { phone: { contains: input.search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
 }
 
 export function buildCustomerOrderBy(
