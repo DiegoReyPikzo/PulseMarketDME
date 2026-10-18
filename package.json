@@ -34,7 +34,9 @@
     "e2e:products": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --products",
     "e2e:reorder": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --reorder",
     "e2e:product-edit": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --product-edit",
-    "e2e:customers": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --customers"
+    "e2e:customers": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --customers",
+    "test:production-tooling": "node --import tsx --test tests/production/environment.test.ts tests/production/migration-checks.test.ts",
+    "prod:db": "node --import tsx scripts/production-with-env.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

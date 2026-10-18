@@ -455,8 +455,9 @@ The schema change is additive. The code on `main` before this change never
 writes customers (only the seed does, with lowercase emails), reads customers
 with explicit field selections, and does not reference `deletedAt`, so it
 keeps working after the migration and the CHECK. The new code reads and
-writes `deletedAt`, so it must not run before the migration. Proposed order,
-none of which has been executed for Production:
+writes `deletedAt`, so it must not run before the migration. This order was
+followed for Production on 2026-10-18 (pre-checks, migration through the
+`prod:db` wrapper, and post-checks all passed before the code was merged):
 
 1. Approved read-only review of Production data: emails where
    `email <> lower(btrim(email))`, duplicates by `lower(email)`, and the row
@@ -471,6 +472,18 @@ none of which has been executed for Production:
    catalog check of the CHECK (`convalidated = true`), the column, and the
    index.
 5. Only then merge and deploy the new code, followed by manual validation.
+
+The operator procedure, the `prod:db` wrapper (target verification against a
+separate Git-ignored allowlist, controlled child environment, and a fixed set
+of read-only checks plus `deploy`), and local configuration instructions are
+in [docs/production-customer-migration.md](docs/production-customer-migration.md).
+Manual recovery is documented separately in
+[docs/production-migration-recovery.md](docs/production-migration-recovery.md);
+the wrapper does not run any recovery command. Run its offline tests with:
+
+```powershell
+npm.cmd run test:production-tooling
+```
 
 Run the customer checks with:
 

@@ -58,6 +58,7 @@ jobs:
           npm run test:product-creation:unit
           npm run test:product-update:unit
           npm run test:customers:unit
+          npm run test:production-tooling
 
       - name: Test E2E configuration
         run: npm run e2e:config:test
