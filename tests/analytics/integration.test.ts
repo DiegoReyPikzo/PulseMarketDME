@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import assert from "node:assert/strict";
-import { after, test } from "node:test";
+import { afterAll, test } from "vitest";
 
 import { Prisma, SaleStatus } from "../../generated/prisma/client";
 import { getDashboardAnalytics } from "../../lib/analytics/dashboard";
@@ -12,7 +12,7 @@ const productIds: string[] = [];
 const saleIds: string[] = [];
 const saleItemIds: string[] = [];
 
-after(async () => {
+afterAll(async () => {
   try {
     if (saleItemIds.length > 0) {
       const result = await prisma.saleItem.deleteMany({

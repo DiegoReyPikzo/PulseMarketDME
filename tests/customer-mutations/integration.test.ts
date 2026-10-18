@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, test } from "node:test";
+import { afterAll, test } from "vitest";
 
 import { Prisma } from "../../generated/prisma/client";
 import { handleCreateCustomerAction, handleUpdateCustomerAction } from "../../lib/customer-mutation-actions";
@@ -26,7 +26,7 @@ const productIds = new Set<string>();
 const saleIds = new Set<string>();
 const saleItemIds = new Set<string>();
 
-after(async () => {
+afterAll(async () => {
   try {
     // Remove only this file's fixtures, children first (relations restrict).
     for (const [ids, remove] of [
