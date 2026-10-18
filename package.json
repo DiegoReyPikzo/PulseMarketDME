@@ -11,7 +11,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "test:unit": "vitest run tests/queries/unit.test.ts",
-    "test:dashboard": "vitest run tests/dashboard/list-params.test.ts",
+    "test:dashboard": "vitest run tests/dashboard/list-params.test.ts tests/dashboard/loading-fallbacks.test.tsx tests/dashboard/page-fallbacks.test.tsx",
     "test:auth": "vitest run tests/auth/authorization.test.ts tests/auth/google-account-disclosure.test.ts tests/auth/same-origin-request.test.ts tests/auth/session.test.ts",
     "test:integration": "vitest run --mode integration tests/queries/integration.test.ts",
     "test:mutations:unit": "vitest run tests/catalog-mutations/unit.test.ts tests/catalog-mutations/client-validation.test.ts tests/catalog-mutations/bulk-form.test.tsx",

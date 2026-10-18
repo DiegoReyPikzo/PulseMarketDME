@@ -20,7 +20,7 @@ import {
   TextFilter,
 } from "../listing-controls";
 import { ListingPagination } from "../listing-pagination";
-import { WingedPiggybank } from "../../components/loading/winged-piggybank";
+import { ProductsFallback } from "../../components/loading/data-fallbacks";
 
 type ProductsPageProps = {
   searchParams: Promise<DashboardSearchParams>;
@@ -221,9 +221,7 @@ function stringValue(value: string | number | undefined, fallback = ""): string 
 export default function ProductsPage({ searchParams }: ProductsPageProps) {
   return (
     <Suspense
-      fallback={
-        <WingedPiggybank layout="page" message="Preparando tu catálogo..." />
-      }
+      fallback={<ProductsFallback />}
     >
       <ProductsListing searchParams={searchParams} />
     </Suspense>
