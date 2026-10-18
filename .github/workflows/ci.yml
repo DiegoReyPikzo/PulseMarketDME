@@ -145,48 +145,22 @@ jobs:
           DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.E2E_DIRECT_URL }}
 
-  # Production is published only from here: Vercel's Git auto-deploy for
-  # `main` is disabled in vercel.json. This job runs only after `validate`
-  # succeeded for the same push, deploys exactly that commit, and builds on
-  # Vercel with Vercel's own Production variables (only the deploy token is
-  # given to this runner). It runs no migrations, seeds, or data changes.
+  # TEST BRANCH ONLY (ci/deploy-gate-check, never merged): the production
+  # deploy is replaced by a marker. No environment, no secrets, no Vercel CLI.
   deploy-production:
     name: deploy-production
     needs: validate
-    if: success() && needs.validate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: success() && needs.validate.result == 'success' && github.event_name == 'pull_request' && github.head_ref == 'ci/deploy-gate-check'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: production
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
       - name: Check out the validated commit
         uses: actions/checkout@v4
 
-      # The Vercel CLI reads Git metadata from the checkout; a detached HEAD
-      # can lose the branch association, so name the validated commit `main`.
-      - name: Pin local main to the validated commit
+      - name: Marker instead of deploying
         run: |
-          git checkout -B main "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git symbolic-ref --short HEAD)" = "main"
-          test -z "$(git status --porcelain)"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Deploy the validated commit to Vercel Production
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          deployment_url="$(npx --yes vercel@62.0.0 deploy --prod --yes \
-            --token "$VERCEL_TOKEN" \
-            --meta githubDeployment=1 \
-            --meta githubCommitRef=main \
-            --meta ciCommitSha="$GITHUB_SHA")"
-          echo "Deployed $GITHUB_SHA to $deployment_url"
-          echo "Production deployment for \`$GITHUB_SHA\`: $deployment_url" >> "$GITHUB_STEP_SUMMARY"
+          echo "DEPLOY-GATE MARKER: deploy would run for validated commit $GITHUB_SHA (PR head ${{ github.event.pull_request.head.sha }})"
+          echo "Deploy-gate marker for $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
