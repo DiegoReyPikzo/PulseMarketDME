@@ -234,9 +234,3 @@ test("serializes sale totals and date while including only selected customer dat
     deleted: true,
   });
 });
-
-// TEST BRANCH ONLY (ci/deploy-gate-check): intentional failure to prove that
-// the deploy job does not run when validate fails. Never merged.
-test("intentional failure for the deploy-gate check", () => {
-  assert.fail("Intentional failure: deploy-gate negative test.");
-});
