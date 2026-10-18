@@ -1,232 +1,336 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Prisma, PrismaClient, SaleStatus } from "../generated/prisma/client";
 
-const connectionString = process.env.DATABASE_URL;
+import { Prisma, PrismaClient } from "../generated/prisma/client";
+import { loadSeedTarget } from "../lib/seed-target";
+import {
+  buildSeedDataset,
+  checkDatasetIntegrity,
+  normalizeDataset,
+  normalizeRow,
+  seedId,
+  SEED_PREFIX,
+  type NormalizedRow,
+  type SeedDataset,
+  type SeedModel,
+} from "./seed-data";
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL must be set.");
+// v2 sample-data seed: insert-only, all-or-nothing, and never run against
+// Production or the E2E database (see lib/seed-target.ts).
+
+type Table = keyof SeedDataset;
+
+// Insertion order follows the foreign keys.
+const TABLES: readonly Table[] = ["products", "customers", "sales", "saleItems"];
+
+const MODEL_OF: Record<Table, SeedModel> = {
+  products: "product",
+  customers: "customer",
+  sales: "sale",
+  saleItems: "saleItem",
+};
+
+const COUNT_OF: Record<Table, number> = {
+  products: 1_000,
+  customers: 3_000,
+  sales: 8_000,
+  saleItems: 24_000,
+};
+
+// Prisma's PostgreSQL bind-parameter budget per statement (PostgreSQL itself
+// allows 65,535). Batches are sized from the inserted column count.
+export const MAX_BIND_PARAMETERS = 32_767;
+
+export function batchSize(rows: readonly object[]): number {
+  if (rows.length === 0) return 0;
+  const columns = Object.keys(rows[0]).sort().join(",");
+  if (rows.some((row) => Object.keys(row).sort().join(",") !== columns)) {
+    throw new Error("Seed rows must all insert the same columns.");
+  }
+  return Math.floor(MAX_BIND_PARAMETERS / Object.keys(rows[0]).length);
 }
 
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString }),
-});
+// Rows that could clash with a v2 row: the v2 ID range, the v2 seed keys,
+// and the other unique values the v2 rows will take.
+export type ConflictKeys = {
+  idRange: readonly [string, string];
+  seedKeyPrefix: string;
+  skus?: readonly string[];
+  emails?: readonly string[];
+  saleIdRange?: readonly [string, string];
+};
 
-const seedPrefix = "pulsemarket-seed-v1";
-const productCount = 100;
-const customerCount = 500;
-const saleCount = 2_000;
-const itemsPerSale = 4;
+export type TableFingerprint = { count: number; digest: string };
 
-function idFor(namespace: number, index: number): string {
-  const suffix = (namespace * 1_000_000_000 + index)
-    .toString(16)
-    .padStart(12, "0");
-
-  return `00000000-0000-4000-8000-${suffix}`;
+// Database operations used by the seed, implemented with Prisma inside one
+// transaction (createPrismaSeedStore) or in memory for offline tests.
+export interface SeedStore {
+  fingerprintOtherRows(table: Table): Promise<TableFingerprint>;
+  findConflictCandidates(table: Table, keys: ConflictKeys): Promise<NormalizedRow[]>;
+  insert(table: Table, rows: readonly object[]): Promise<number>;
+  readSeededRows(table: Table): Promise<NormalizedRow[]>;
 }
 
-function seedKeyFor(model: string, index: number): string {
-  return `${seedPrefix}:${model}:${String(index).padStart(6, "0")}`;
+export class SeedConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SeedConflictError";
+  }
 }
 
-function decimalFromCents(cents: number): Prisma.Decimal {
-  const whole = Math.floor(cents / 100);
-  const fraction = String(cents % 100).padStart(2, "0");
-
-  return new Prisma.Decimal(`${whole}.${fraction}`);
+export class SeedVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SeedVerificationError";
+  }
 }
 
-const categories = ["Books", "Clothing", "Electronics", "Home", "Stationery"];
-const firstNames = ["Alex", "Jordan", "Morgan", "Riley", "Taylor"];
-const lastNames = ["Anderson", "Garcia", "Kim", "Patel", "Smith"];
+export type SeedSummary = {
+  inserted: Record<Table, number>;
+  alreadyPresent: Record<Table, number>;
+  otherRowsUnchanged: Record<Table, number>;
+};
 
-const products: Prisma.ProductCreateManyInput[] = Array.from(
-  { length: productCount },
-  (_, offset) => {
-    const index = offset + 1;
+function sameRow(left: NormalizedRow, right: NormalizedRow): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    if ((left[key] ?? null) !== (right[key] ?? null)) return false;
+  }
+  return true;
+}
 
-    return {
-      id: idFor(1, index),
-      sku: `PM-${String(index).padStart(4, "0")}`,
-      name: `PulseMarket Product ${String(index).padStart(4, "0")}`,
-      description: `Deterministic seed product ${index}.`,
-      category: categories[offset % categories.length],
-      price: decimalFromCents(499 + index * 137),
-      stock: (index * 17) % 250,
-      sortOrder: offset,
-      seedKey: seedKeyFor("product", index),
-    };
-  },
-);
+function conflictKeys(table: Table, rows: readonly NormalizedRow[]): ConflictKeys {
+  const model = MODEL_OF[table];
+  return {
+    idRange: [seedId(model, 1), seedId(model, COUNT_OF[table])],
+    seedKeyPrefix: `${SEED_PREFIX}:${model}:`,
+    ...(table === "products" ? { skus: rows.map((row) => String(row.sku)) } : {}),
+    ...(table === "customers" ? { emails: rows.map((row) => String(row.email)) } : {}),
+    ...(table === "saleItems"
+      ? { saleIdRange: [seedId("sale", 1), seedId("sale", COUNT_OF.sales)] as const }
+      : {}),
+  };
+}
 
-const customers: Prisma.CustomerCreateManyInput[] = Array.from(
-  { length: customerCount },
-  (_, offset) => {
-    const index = offset + 1;
+// Runs inside the caller's transaction. Any thrown error must roll it back:
+// nothing here catches errors.
+export async function runSeedTransaction(
+  store: SeedStore,
+  dataset: SeedDataset,
+): Promise<SeedSummary> {
+  const expected = normalizeDataset(dataset);
+  const summary: SeedSummary = {
+    inserted: { products: 0, customers: 0, sales: 0, saleItems: 0 },
+    alreadyPresent: { products: 0, customers: 0, sales: 0, saleItems: 0 },
+    otherRowsUnchanged: { products: 0, customers: 0, sales: 0, saleItems: 0 },
+  };
 
-    return {
-      id: idFor(2, index),
-      name: `${firstNames[offset % firstNames.length]} ${lastNames[Math.floor(offset / firstNames.length) % lastNames.length]} ${String(index).padStart(4, "0")}`,
-      email: `customer-${String(index).padStart(5, "0")}@seed.pulsemarket.example`,
-      phone: `+1555${String(index).padStart(7, "0")}`,
-      seedKey: seedKeyFor("customer", index),
-    };
-  },
-);
-
-const sales: Prisma.SaleCreateManyInput[] = [];
-const saleItems: Prisma.SaleItemCreateManyInput[] = [];
-
-for (let saleIndex = 1; saleIndex <= saleCount; saleIndex += 1) {
-  const itemRows: Prisma.SaleItemCreateManyInput[] = [];
-  let total = new Prisma.Decimal(0);
-
-  for (let itemOffset = 0; itemOffset < itemsPerSale; itemOffset += 1) {
-    const productIndex =
-      (((saleIndex - 1) * 7 + itemOffset * 13) % productCount) + 1;
-    const quantity = ((saleIndex + itemOffset) % 5) + 1;
-    const unitPrice = decimalFromCents(499 + productIndex * 137);
-    const lineTotal = unitPrice.mul(quantity);
-
-    total = total.add(lineTotal);
-    itemRows.push({
-      id: idFor(4, (saleIndex - 1) * itemsPerSale + itemOffset + 1),
-      saleId: idFor(3, saleIndex),
-      productId: idFor(1, productIndex),
-      quantity,
-      unitPrice,
-      lineTotal,
-      seedKey: seedKeyFor(
-        "sale-item",
-        (saleIndex - 1) * itemsPerSale + itemOffset + 1,
-      ),
-    });
+  // Fingerprint of every row that is not v2 sample data, taken in the same
+  // transaction snapshot before and after the inserts.
+  const before = new Map<Table, TableFingerprint>();
+  for (const table of TABLES) {
+    before.set(table, await store.fingerprintOtherRows(table));
   }
 
-  sales.push({
-    id: idFor(3, saleIndex),
-    customerId: idFor(2, ((saleIndex - 1) % customerCount) + 1),
-    status: SaleStatus.COMPLETED,
-    saleDate: new Date(Date.UTC(2024, 0, 1 + ((saleIndex - 1) % 730))),
-    total,
-    seedKey: seedKeyFor("sale", saleIndex),
-  });
-  saleItems.push(...itemRows);
-}
-
-async function insertSeedData(): Promise<void> {
-  await prisma.$transaction(async (transaction) => {
-    await transaction.product.createMany({ data: products, skipDuplicates: true });
-    await transaction.customer.createMany({
-      data: customers,
-      skipDuplicates: true,
-    });
-    await transaction.sale.createMany({ data: sales, skipDuplicates: true });
-    await transaction.saleItem.createMany({
-      data: saleItems,
-      skipDuplicates: true,
-    });
-  });
-}
-
-async function verifySeedData(): Promise<void> {
-  const seeded = { seedKey: { startsWith: `${seedPrefix}:` } };
-  const [productTotal, customerTotal, saleTotal, saleItemTotal] =
-    await Promise.all([
-      prisma.product.count({ where: seeded }),
-      prisma.customer.count({ where: seeded }),
-      prisma.sale.count({ where: seeded }),
-      prisma.saleItem.count({ where: seeded }),
-    ]);
-
-  if (
-    productTotal !== productCount ||
-    customerTotal !== customerCount ||
-    saleTotal !== saleCount ||
-    saleItemTotal !== saleCount * itemsPerSale
-  ) {
-    throw new Error(
-      `Seed count mismatch: Product=${productTotal}, Customer=${customerTotal}, Sale=${saleTotal}, SaleItem=${saleItemTotal}.`,
+  const missing = new Map<Table, object[]>();
+  for (const table of TABLES) {
+    const expectedById = new Map(expected[table].map((row) => [row.id, row]));
+    const candidates = await store.findConflictCandidates(
+      table,
+      conflictKeys(table, expected[table]),
+    );
+    const present = new Set<string | number | null>();
+    let collisions = 0;
+    let divergent = 0;
+    for (const candidate of candidates) {
+      const match = expectedById.get(candidate.id);
+      // A row is v2 sample data only if both its ID and seed key are ours;
+      // anything else holding a reserved value belongs to other data.
+      if (!match || candidate.seedKey !== match.seedKey) collisions += 1;
+      else if (!sameRow(candidate, match)) divergent += 1;
+      else present.add(candidate.id);
+    }
+    if (collisions > 0) {
+      throw new SeedConflictError(
+        `${table}: ${collisions} existing row(s) already use IDs, seed keys or unique values reserved for the v2 sample data. Nothing was written.`,
+      );
+    }
+    if (divergent > 0) {
+      throw new SeedConflictError(
+        `${table}: ${divergent} existing v2 sample row(s) differ from the generated data. Nothing was overwritten.`,
+      );
+    }
+    summary.alreadyPresent[table] = present.size;
+    missing.set(
+      table,
+      dataset[table].filter((row) => !present.has((row as { id: string }).id)),
     );
   }
 
-  const [relatedSales, relatedItems, seededSales] = await Promise.all([
-    prisma.sale.count({
-      where: {
-        ...seeded,
-        customer: { seedKey: { startsWith: `${seedPrefix}:customer:` } },
-      },
-    }),
-    prisma.saleItem.count({
-      where: {
-        ...seeded,
-        sale: { seedKey: { startsWith: `${seedPrefix}:sale:` } },
-        product: { seedKey: { startsWith: `${seedPrefix}:product:` } },
-      },
-    }),
-    prisma.sale.findMany({
-      where: seeded,
-      select: {
-        total: true,
-        items: {
-          select: {
-            quantity: true,
-            unitPrice: true,
-            lineTotal: true,
-          },
-        },
-      },
-    }),
-  ]);
-
-  if (relatedSales !== saleCount || relatedItems !== saleItemTotal) {
-    throw new Error(
-      `Seed relation mismatch: related Sale=${relatedSales}, related SaleItem=${relatedItems}.`,
-    );
-  }
-
-  for (const sale of seededSales) {
-    let itemTotal = new Prisma.Decimal(0);
-
-    for (const item of sale.items) {
-      const calculatedLineTotal = item.unitPrice.mul(item.quantity);
-
-      if (!calculatedLineTotal.equals(item.lineTotal)) {
-        throw new Error(
-          `Sale item line total is inconsistent for sale with ${sale.items.length} items.`,
+  for (const table of TABLES) {
+    const rows = missing.get(table) ?? [];
+    const size = batchSize(rows);
+    for (let start = 0; start < rows.length; start += size) {
+      const batch = rows.slice(start, start + size);
+      const count = await store.insert(table, batch);
+      if (count !== batch.length) {
+        throw new SeedVerificationError(
+          `${table}: inserted ${count} of ${batch.length} rows in a batch.`,
         );
       }
-
-      itemTotal = itemTotal.add(item.lineTotal);
+      summary.inserted[table] += count;
     }
+  }
 
-    if (!itemTotal.equals(sale.total)) {
-      throw new Error(
-        `Sale total is inconsistent for sale with ${sale.items.length} items.`,
+  // Read the v2 rows back: they must match the generated data exactly and
+  // pass the integrity checks on their own.
+  const stored = {} as Record<Table, NormalizedRow[]>;
+  for (const table of TABLES) {
+    stored[table] = await store.readSeededRows(table);
+    const expectedById = new Map(expected[table].map((row) => [row.id, row]));
+    const mismatched = stored[table].filter((row) => {
+      const match = expectedById.get(row.id);
+      return !match || !sameRow(row, match);
+    }).length;
+    if (stored[table].length !== expected[table].length || mismatched > 0) {
+      throw new SeedVerificationError(
+        `${table}: stored v2 rows do not match the generated data (${stored[table].length} stored, ${mismatched} different).`,
       );
     }
   }
+  const problems = checkDatasetIntegrity(stored);
+  if (problems.length > 0) {
+    throw new SeedVerificationError(`Stored v2 data failed integrity checks: ${problems.join(" ")}`);
+  }
 
-  console.log(`Seed Product records: ${productTotal}`);
-  console.log(`Seed Customer records: ${customerTotal}`);
-  console.log(`Seed Sale records: ${saleTotal}`);
-  console.log(`Seed SaleItem records: ${saleItemTotal}`);
-  console.log(
-    `Seed total records: ${productTotal + customerTotal + saleTotal + saleItemTotal}`,
-  );
-  console.log("Seed relationships and Decimal totals: verified");
+  for (const table of TABLES) {
+    const after = await store.fingerprintOtherRows(table);
+    const previous = before.get(table)!;
+    if (after.count !== previous.count || after.digest !== previous.digest) {
+      throw new SeedVerificationError(
+        `${table}: rows outside the v2 sample data changed during the seed.`,
+      );
+    }
+    summary.otherRowsUnchanged[table] = after.count;
+  }
+
+  return summary;
+}
+
+const TABLE_SQL: Record<Table, string> = {
+  products: '"Product"',
+  customers: '"Customer"',
+  sales: '"Sale"',
+  saleItems: '"SaleItem"',
+};
+
+export function createPrismaSeedStore(transaction: Prisma.TransactionClient): SeedStore {
+  const delegates = {
+    products: transaction.product,
+    customers: transaction.customer,
+    sales: transaction.sale,
+    saleItems: transaction.saleItem,
+  };
+  const seededPrefix = (table: Table) => `${SEED_PREFIX}:${MODEL_OF[table]}:`;
+
+  return {
+    async fingerprintOtherRows(table) {
+      // Digest of every persisted column of every non-v2 row, ordered by ID.
+      // Only the count and the hash leave the database.
+      const rows = await transaction.$queryRaw<Array<{ count: number; digest: string }>>(
+        Prisma.sql`
+          SELECT count(*)::int AS count,
+                 coalesce(md5(string_agg(md5(row_to_json(t)::text), '' ORDER BY t.id)), '') AS digest
+          FROM ${Prisma.raw(TABLE_SQL[table])} AS t
+          WHERE t."seedKey" IS NULL OR t."seedKey" NOT LIKE ${`${SEED_PREFIX}:%`}
+        `,
+      );
+      return { count: rows[0]?.count ?? 0, digest: rows[0]?.digest ?? "" };
+    },
+    async findConflictCandidates(table, keys) {
+      const or: object[] = [
+        { id: { gte: keys.idRange[0], lte: keys.idRange[1] } },
+        { seedKey: { startsWith: keys.seedKeyPrefix } },
+      ];
+      if (keys.skus) or.push({ sku: { in: [...keys.skus] } });
+      if (keys.emails) or.push({ email: { in: [...keys.emails] } });
+      if (keys.saleIdRange) {
+        or.push({ saleId: { gte: keys.saleIdRange[0], lte: keys.saleIdRange[1] } });
+      }
+      // The delegates share findMany semantics; the union type is not callable.
+      const delegate = delegates[table] as unknown as {
+        findMany(args: object): Promise<object[]>;
+      };
+      return (await delegate.findMany({ where: { OR: or } })).map(normalizeRow);
+    },
+    async insert(table, rows) {
+      // No skipDuplicates: a unique violation aborts the whole transaction.
+      const delegate = delegates[table] as unknown as {
+        createMany(args: { data: object[] }): Promise<{ count: number }>;
+      };
+      return (await delegate.createMany({ data: [...rows] })).count;
+    },
+    async readSeededRows(table) {
+      const delegate = delegates[table] as unknown as {
+        findMany(args: object): Promise<object[]>;
+      };
+      const rows = await delegate.findMany({
+        where: { seedKey: { startsWith: seededPrefix(table) } },
+        orderBy: { id: "asc" },
+      });
+      return rows.map(normalizeRow);
+    },
+  };
 }
 
 async function main(): Promise<void> {
-  await insertSeedData();
-  await verifySeedData();
+  // Validate the destination before any database client exists.
+  const target = loadSeedTarget();
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: target.connectionString }),
+  });
+  try {
+    const dataset = buildSeedDataset();
+    const summary = await prisma.$transaction(
+      (transaction) => runSeedTransaction(createPrismaSeedStore(transaction), dataset),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 30_000,
+        timeout: 600_000,
+      },
+    );
+    console.log(`Seed v2 target endpoint: ${target.endpointId}`);
+    for (const table of TABLES) {
+      console.log(
+        `${table}: inserted ${summary.inserted[table]}, already present ${summary.alreadyPresent[table]}, other rows unchanged ${summary.otherRowsUnchanged[table]}`,
+      );
+    }
+    console.log("Seed v2 rows, relations, Decimal totals and other rows: verified");
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main()
-  .catch((error: unknown) => {
+const runDirectly =
+  process.argv[1] !== undefined &&
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+
+if (runDirectly) {
+  main().catch((error: unknown) => {
     console.error("PulseMarket seed failed.");
-    throw error;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+    // Seed errors carry table names and counts only. Database and driver
+    // errors may echo connection details or row values, so only their type
+    // and code are shown.
+    if (error instanceof Error && /^Seed(Target|Conflict|Verification)Error$/.test(error.name)) {
+      console.error(`${error.name}: ${error.message}`);
+    } else if (error instanceof Error) {
+      const code = (error as { code?: unknown }).code;
+      console.error(`${error.name}${typeof code === "string" ? ` (${code})` : ""}`);
+    } else {
+      console.error("Unknown error.");
+    }
+    process.exitCode = 1;
   });
+}
