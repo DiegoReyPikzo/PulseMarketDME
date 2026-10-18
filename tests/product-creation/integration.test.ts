@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, test } from "node:test";
+import { afterAll, test } from "vitest";
 
 import { Prisma } from "../../generated/prisma/client";
 import {
@@ -15,7 +15,7 @@ import { listProducts } from "../../lib/queries/products";
 
 const fixtureIds = new Set<string>();
 
-after(async () => {
+afterAll(async () => {
   try {
     const ids = [...fixtureIds];
     if (ids.length > 0) {

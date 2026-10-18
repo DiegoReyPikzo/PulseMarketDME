@@ -1,14 +1,14 @@
 import "dotenv/config";
 
 import assert from "node:assert/strict";
-import { after, test } from "node:test";
+import { afterAll, test } from "vitest";
 
 import { prisma } from "../../lib/prisma";
 import { listCustomers } from "../../lib/queries/customers";
 import { listProducts } from "../../lib/queries/products";
 import { listSales } from "../../lib/queries/sales";
 
-after(async () => {
+afterAll(async () => {
   await prisma.$disconnect();
 });
 

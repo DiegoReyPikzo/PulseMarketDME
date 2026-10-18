@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { createRequire } from "node:module";
 import { devNull, tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   prepareMainSchemaFile,

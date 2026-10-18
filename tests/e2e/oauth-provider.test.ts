@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, test } from "node:test";
+import { afterAll, test } from "vitest";
 
 import { startE2eOAuthProvider } from "../../scripts/e2e-oauth-provider";
 
@@ -13,7 +13,7 @@ const simulatorPromise = startE2eOAuthProvider({
   subject: "test-run-subject",
 });
 
-after(async () => {
+afterAll(async () => {
   const simulator = await simulatorPromise;
   await simulator.close();
 });

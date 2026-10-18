@@ -73,6 +73,12 @@ filters. Monetary Decimal values are serialized as fixed two-decimal
 strings and dates as ISO strings. These uncached functions execute database
 page queries and matching counts.
 
+Unit and integration tests run on Vitest (`vitest.config.mts`). The default
+mode only collects offline suites, so a bare `npx vitest run` never reaches a
+database. The `*:integration` scripts use `--mode integration`, run their
+files one at a time, and CI runs them through `npm run e2e:with-env` against
+the isolated E2E database.
+
 Unit tests exercise parsing, query construction, pagination, stable sorting,
 and serialization without connecting to or changing Neon:
 

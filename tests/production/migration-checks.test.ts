@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   CUSTOMER_CHECK_DEFINITION,
