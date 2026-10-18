@@ -75,7 +75,9 @@ page queries and matching counts.
 
 Unit and integration tests run on Vitest (`vitest.config.mts`). The default
 mode only collects offline suites, so a bare `npx vitest run` never reaches a
-database. The `*:integration` scripts use `--mode integration`, run their
+database. Browser form tests (`tests/**/*.test.tsx`) run in a separate
+`client` project on jsdom with React's client build, and mock the Server
+Actions they call. The `*:integration` scripts use `--mode integration`, run their
 files one at a time, and CI runs them through `npm run e2e:with-env` against
 the isolated E2E database.
 
@@ -252,6 +254,17 @@ rejected with a reload-and-retry message; concurrent serializable transaction
 conflicts return the same recovery guidance. Only the positions already
 occupied by IDs on the submitted page are reassigned, so other pages retain
 their positions.
+
+## Form validation
+
+The product creation and edit forms, the catalog bulk form, and the customer
+creation and edit forms validate with the same Zod schemas in the browser and
+in their Server Actions. The schemas live in `lib/validation/`, which has no
+server-only or Prisma imports. In the browser, invalid values show the same
+field messages the server would return, and the action is not called. The
+server still validates every submission and remains the authority. Rules that
+need the database (SKU and email uniqueness, edit conflicts, missing or
+deleted records) are checked only on the server.
 
 ## Product catalog mutations
 

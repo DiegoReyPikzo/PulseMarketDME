@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent, KeyboardEvent, SyntheticEvent } from "react";
 
 import type { UpdateProductActionState } from "../../../lib/product-update-action";
+import { FORM_VALIDATION_MESSAGE } from "../../../lib/validation/field-errors";
+import { productValueErrors } from "../../../lib/validation/product";
 import { getProductForEditAction, updateProductAction } from "./actions";
 import {
   ProductFields,
@@ -148,6 +150,19 @@ export function ProductEditDialog({
       load.status !== "ready" ||
       values === null
     ) {
+      return;
+    }
+    // Only the new values are checked here; original values and conflicts
+    // stay with the server.
+    const clientFieldErrors = productValueErrors(values);
+    if (clientFieldErrors) {
+      setResult({
+        status: "error",
+        code: "VALIDATION",
+        message: FORM_VALIDATION_MESSAGE,
+        fieldErrors: clientFieldErrors,
+        conflictFields: [],
+      });
       return;
     }
     submittingRef.current = true;

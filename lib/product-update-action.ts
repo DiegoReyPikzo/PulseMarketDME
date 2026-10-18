@@ -13,6 +13,10 @@ import {
   type UpdateProductInput,
   type UpdateProductResult,
 } from "./product-update";
+import {
+  collectFieldErrors,
+  FORM_VALIDATION_MESSAGE,
+} from "./validation/field-errors";
 
 export type EditableProductValues = Record<ProductEditableField, string>;
 
@@ -158,26 +162,17 @@ export async function handleUpdateProductAction(
     original,
   });
   if (!parsed.success) {
-    const fieldErrors: Partial<Record<ProductEditableField, string>> = {};
-    let invalidEnvelope = false;
-    for (const issue of parsed.error.issues) {
-      const [group, field] = issue.path;
-      if (
-        group === "values" &&
-        typeof field === "string" &&
-        isEditableField(field)
-      ) {
-        fieldErrors[field] ??= issue.message;
-      } else {
-        invalidEnvelope = true;
-      }
-    }
-    return invalidEnvelope
+    const { fieldErrors, hasOtherIssues } = collectFieldErrors(
+      parsed.error.issues,
+      isEditableField,
+      ["values"],
+    );
+    return hasOtherIssues
       ? errorState(
           "INVALID",
           "Los datos del formulario no son válidos. Recarga el producto e inténtalo de nuevo.",
         )
-      : errorState("VALIDATION", "Revisa los campos indicados.", fieldErrors);
+      : errorState("VALIDATION", FORM_VALIDATION_MESSAGE, fieldErrors);
   }
 
   let result: UpdateProductResult;

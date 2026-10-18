@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent, KeyboardEvent, SyntheticEvent } from "react";
 
 import type { UpdateCustomerActionState } from "../../../lib/customer-mutation-actions";
+import { customerValueErrors } from "../../../lib/validation/customer";
+import { FORM_VALIDATION_MESSAGE } from "../../../lib/validation/field-errors";
 import { getCustomerForEditAction, updateCustomerAction } from "./actions";
 import {
   CustomerFields,
@@ -139,6 +141,19 @@ export function CustomerEditDialog({
       load.status !== "ready" ||
       values === null
     ) {
+      return;
+    }
+    // Only the new values are checked here; original values, conflicts and
+    // email uniqueness stay with the server.
+    const clientFieldErrors = customerValueErrors(values);
+    if (clientFieldErrors) {
+      setResult({
+        status: "error",
+        code: "VALIDATION",
+        message: FORM_VALIDATION_MESSAGE,
+        fieldErrors: clientFieldErrors,
+        conflictFields: [],
+      });
       return;
     }
     submittingRef.current = true;

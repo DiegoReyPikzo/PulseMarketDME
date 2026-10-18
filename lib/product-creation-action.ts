@@ -6,6 +6,10 @@ import {
   ProductCreationError,
   type CreateProductInput,
 } from "./product-creation";
+import {
+  collectFieldErrors,
+  FORM_VALIDATION_MESSAGE,
+} from "./validation/field-errors";
 
 export type CreateProductField =
   | "sku"
@@ -54,20 +58,13 @@ export async function handleCreateProductAction(
 
   const parsed = createProductInputSchema.safeParse(candidate);
   if (!parsed.success) {
-    const fieldErrors: Partial<Record<CreateProductField, string>> = {};
-    for (const issue of parsed.error.issues) {
-      const field = issue.path[0];
-      if (
-        typeof field === "string" &&
-        isCreateProductField(field) &&
-        fieldErrors[field] === undefined
-      ) {
-        fieldErrors[field] = issue.message;
-      }
-    }
+    const { fieldErrors } = collectFieldErrors(
+      parsed.error.issues,
+      isCreateProductField,
+    );
     return {
       status: "error",
-      message: "Revisa los campos indicados.",
+      message: FORM_VALIDATION_MESSAGE,
       fieldErrors,
     };
   }

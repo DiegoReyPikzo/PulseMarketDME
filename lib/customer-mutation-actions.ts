@@ -14,6 +14,11 @@ import {
   type UpdateCustomerInput,
   type UpdateCustomerResult,
 } from "./customer-mutations";
+import {
+  collectFieldErrors,
+  FORM_VALIDATION_MESSAGE,
+  type ValidationIssue,
+} from "./validation/field-errors";
 
 export type CustomerFieldErrors = Partial<Record<CustomerEditableField, string>>;
 
@@ -136,28 +141,20 @@ function mapMutationError(
 }
 
 function validationState(
-  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+  issues: readonly ValidationIssue[],
   valuesPrefix: readonly PropertyKey[],
 ): CustomerActionError {
-  const fieldErrors: CustomerFieldErrors = {};
-  let invalidEnvelope = false;
-  for (const issue of issues) {
-    const matchesPrefix = valuesPrefix.every(
-      (segment, index) => issue.path[index] === segment,
-    );
-    const field = issue.path[valuesPrefix.length];
-    if (matchesPrefix && typeof field === "string" && isEditableField(field)) {
-      fieldErrors[field] ??= issue.message;
-    } else {
-      invalidEnvelope = true;
-    }
-  }
-  return invalidEnvelope
+  const { fieldErrors, hasOtherIssues } = collectFieldErrors(
+    issues,
+    isEditableField,
+    valuesPrefix,
+  );
+  return hasOtherIssues
     ? errorState(
         "INVALID",
         "Los datos del formulario no son válidos. Recarga la página e inténtalo de nuevo.",
       )
-    : errorState("VALIDATION", "Revisa los campos indicados.", fieldErrors);
+    : errorState("VALIDATION", FORM_VALIDATION_MESSAGE, fieldErrors);
 }
 
 function readCustomerId(formData: FormData): string | null {

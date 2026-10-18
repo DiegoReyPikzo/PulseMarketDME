@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  bulkProductMutationInputSchema,
   createProductMutationRepository,
   deleteProductInputSchema,
   mutateProducts,
@@ -35,6 +34,7 @@ import {
   type GetProductForEditActionState,
   type UpdateProductActionState,
 } from "../../../lib/product-update-action";
+import { parseBulkProductMutationForm } from "../../../lib/validation/bulk-products";
 
 export type ProductMutationActionState =
   | { status: "success"; message: string }
@@ -114,35 +114,9 @@ export async function bulkMutateProductsAction(
 ): Promise<ProductMutationActionState> {
   await getAuthenticatedSession();
 
-  const entries = [...formData.entries()];
-  const entryNames = entries.map(([name]) => name);
-  if (new Set(entryNames).size !== entryNames.length) {
-    return { status: "error", message: "La selección contiene campos repetidos." };
-  }
-  const fields = Object.fromEntries(entries);
-  const idsValue = fields.productIds;
-  if (typeof idsValue !== "string") {
-    return { status: "error", message: "La selección de productos no es válida." };
-  }
-
-  let ids: unknown;
-  try {
-    ids = JSON.parse(idsValue);
-  } catch {
-    return { status: "error", message: "La selección de productos no es válida." };
-  }
-
-  const fieldsWithoutIds = Object.fromEntries(
-    entries.filter(([name]) => name !== "productIds"),
-  );
-  const candidate = { ...fieldsWithoutIds, ids };
-  const parsed = bulkProductMutationInputSchema.safeParse(candidate);
-
+  const parsed = parseBulkProductMutationForm(formData);
   if (!parsed.success) {
-    return {
-      status: "error",
-      message: parsed.error.issues.map((issue) => issue.message).join(" "),
-    };
+    return { status: "error", message: parsed.message };
   }
 
   let count: number;

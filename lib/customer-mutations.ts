@@ -3,46 +3,13 @@ import "server-only";
 import { z } from "zod";
 
 import type { Prisma as PrismaTypes } from "../generated/prisma/client";
+import { customerValuesSchema } from "./validation/customer";
+
+export { customerValuesSchema };
 
 export const CUSTOMER_EDITABLE_FIELDS = ["name", "email", "phone"] as const;
 
 export type CustomerEditableField = (typeof CUSTOMER_EDITABLE_FIELDS)[number];
-
-// Format check only; this does not verify that a phone number is real.
-const PHONE_CHARACTERS = /^[0-9+ ().-]*$/;
-
-// New values. Emails are trimmed and lowercased before validation so stored
-// values satisfy the database CHECK (email = lower(btrim(email))); the
-// UNIQUE index then makes email uniqueness case-insensitive.
-export const customerValuesSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .min(1, "El nombre es obligatorio.")
-      .max(160, "El nombre admite hasta 160 caracteres."),
-    email: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .min(1, "El correo electrónico es obligatorio.")
-      .max(254, "El correo electrónico admite hasta 254 caracteres.")
-      .pipe(z.email("Ingresa un correo electrónico válido.")),
-    phone: z
-      .string()
-      .trim()
-      .max(32, "El teléfono admite hasta 32 caracteres.")
-      .regex(
-        PHONE_CHARACTERS,
-        "El teléfono solo admite dígitos, espacios, +, paréntesis, guion y punto.",
-      )
-      .refine(
-        (value) => value.length === 0 || /\d/.test(value),
-        "El teléfono debe incluir al menos un dígito.",
-      )
-      .transform((value) => (value.length === 0 ? null : value)),
-  })
-  .strict();
 
 // Original values come from the browser. They are untrusted input used only to
 // detect conflicts; they never authorize a write or replace database values.

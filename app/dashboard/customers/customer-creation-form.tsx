@@ -5,6 +5,8 @@ import { useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 
 import type { CreateCustomerActionState } from "../../../lib/customer-mutation-actions";
+import { customerValueErrors } from "../../../lib/validation/customer";
+import { FORM_VALIDATION_MESSAGE } from "../../../lib/validation/field-errors";
 import { createCustomerAction } from "./actions";
 import {
   CustomerFields,
@@ -30,8 +32,19 @@ export function CustomerCreationForm() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current || pending) return;
-    submittingRef.current = true;
     const formData = new FormData(event.currentTarget);
+    const clientFieldErrors = customerValueErrors(Object.fromEntries(formData));
+    if (clientFieldErrors) {
+      setResult({
+        status: "error",
+        code: "VALIDATION",
+        message: FORM_VALIDATION_MESSAGE,
+        fieldErrors: clientFieldErrors,
+        conflictFields: [],
+      });
+      return;
+    }
+    submittingRef.current = true;
     startTransition(async () => {
       try {
         const actionResult = await createCustomerAction(formData);

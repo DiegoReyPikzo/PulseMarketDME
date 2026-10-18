@@ -8,6 +8,8 @@ import type {
   CreateProductActionState,
   CreateProductField,
 } from "../../../lib/product-creation-action";
+import { FORM_VALIDATION_MESSAGE } from "../../../lib/validation/field-errors";
+import { productValueErrors } from "../../../lib/validation/product";
 import { createProductAction } from "./actions";
 import { ProductFields, type ProductFormValues } from "./product-fields";
 
@@ -35,6 +37,15 @@ export function ProductCreationForm() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const clientFieldErrors = productValueErrors(Object.fromEntries(formData));
+    if (clientFieldErrors) {
+      setResult({
+        status: "error",
+        message: FORM_VALIDATION_MESSAGE,
+        fieldErrors: clientFieldErrors,
+      });
+      return;
+    }
     startTransition(async () => {
       const actionResult = await createProductAction(formData);
       setResult(actionResult);

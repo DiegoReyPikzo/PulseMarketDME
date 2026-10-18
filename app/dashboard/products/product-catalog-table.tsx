@@ -10,6 +10,7 @@ import {
   softDeleteProductAction,
   type ProductMutationActionState,
 } from "./actions";
+import { parseBulkProductMutationForm } from "../../../lib/validation/bulk-products";
 import { ProductEditDialog } from "./product-edit-dialog";
 
 export type ProductListItem = {
@@ -189,6 +190,11 @@ export function ProductCatalogTable({
       {selectedIds.length > 0 ? (
         <form
           action={async (formData) => {
+            const checked = parseBulkProductMutationForm(formData);
+            if (!checked.success) {
+              onFeedback({ status: "error", message: checked.message });
+              return;
+            }
             if (
               !window.confirm(
                 `¿Aplicar el cambio a ${selectedIds.length} productos?`,

@@ -3,14 +3,12 @@ import "server-only";
 import { z } from "zod";
 
 import { Prisma, type Prisma as PrismaTypes } from "../generated/prisma/client";
+import type { BulkProductMutationInput } from "./validation/bulk-products";
 
-const productIdsSchema = z
-  .array(z.uuid())
-  .min(1, "Selecciona al menos un producto.")
-  .max(50, "Puedes modificar hasta 50 productos por lote.")
-  .refine((ids) => new Set(ids).size === ids.length, {
-    message: "La selección contiene IDs duplicados.",
-  });
+export {
+  bulkProductMutationInputSchema,
+  type BulkProductMutationInput,
+} from "./validation/bulk-products";
 
 const reorderIdsSchema = z
   .array(z.uuid())
@@ -47,75 +45,9 @@ export const reorderProductInputSchema = z
 
 export type ReorderProductInput = z.infer<typeof reorderProductInputSchema>;
 
-const adjustmentAmountSchema = z
-  .string()
-  .trim()
-  .max(14)
-  .regex(/^-?(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, "El ajuste debe ser un número válido con hasta dos decimales.");
-
-const bulkAdjustmentSchema = z
-  .object({
-    ids: productIdsSchema,
-    operation: z.literal("adjust"),
-    field: z.enum(["price", "stock"]),
-    mode: z.enum(["fixed", "percentage"]),
-    amount: adjustmentAmountSchema,
-  })
-  .strict()
-  .superRefine((input, context) => {
-    const amount = Number(input.amount);
-
-    if (
-      input.mode === "percentage" &&
-      (!Number.isFinite(amount) || amount < -100 || amount > 1000)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message: "El porcentaje debe estar entre -100 y 1000.",
-      });
-    }
-
-    if (
-      input.field === "stock" &&
-      input.mode === "fixed" &&
-      !/^-?(?:0|[1-9]\d{0,9})$/.test(input.amount)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message: "El ajuste fijo de stock debe ser un número entero.",
-      });
-    }
-  });
-
 export const deleteProductInputSchema = z
   .object({ id: z.uuid() })
   .strict();
-
-export const bulkProductMutationInputSchema = z.discriminatedUnion(
-  "operation",
-  [
-    z
-      .object({
-        ids: productIdsSchema,
-        operation: z.literal("delete"),
-      })
-      .strict(),
-    z
-      .object({
-        ids: productIdsSchema,
-        operation: z.literal("category"),
-        category: z.string().trim().min(1, "La categoría no puede estar vacía.").max(100),
-      })
-      .strict(),
-    bulkAdjustmentSchema,
-  ],
-);
-
-export type BulkProductMutationInput = z.infer<
-  typeof bulkProductMutationInputSchema
->;
 
 export type ProductMutationRecord = {
   id: string;
