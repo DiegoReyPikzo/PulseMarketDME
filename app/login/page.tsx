@@ -1,19 +1,63 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { decode } from "next-auth/jwt";
 import { Suspense } from "react";
 
 import { getLoginProviderConfiguration } from "../../lib/auth-provider-config";
+import { AccessDeniedHelp } from "./access-denied-help";
 import { OAuthSignInButton } from "./oauth-sign-in-button";
 
 type LoginPageProps = {
   searchParams: Promise<{ error?: string | string[] }>;
 };
 
+const SESSION_COOKIE_NAMES = [
+  "__Secure-next-auth.session-token",
+  "next-auth.session-token",
+];
+
+// Provider of an existing session that was denied (for example, an account
+// removed from the authorized list). Read-only: it never creates, changes or
+// clears a session, and any failure simply means "unknown".
+async function getSessionProvider(): Promise<string | null> {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) return null;
+  try {
+    const cookieStore = await cookies();
+    for (const name of SESSION_COOKIE_NAMES) {
+      const token =
+        cookieStore.get(name)?.value ??
+        cookieStore
+          .getAll()
+          .filter(
+            (cookie) =>
+              cookie.name.startsWith(`${name}.`) &&
+              /^\d+$/.test(cookie.name.slice(name.length + 1)),
+          )
+          .sort(
+            (left, right) =>
+              Number(left.name.slice(name.length + 1)) -
+              Number(right.name.slice(name.length + 1)),
+          )
+          .map((cookie) => cookie.value)
+          .join("");
+      if (!token) continue;
+      const payload = await decode({ token, secret });
+      return typeof payload?.provider === "string" ? payload.provider : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 async function LoginError({
   searchParams,
 }: LoginPageProps) {
   const params = await searchParams;
   if (params.error === undefined) return null;
-  const canRequestGoogleAccess = params.error === "AccessDenied";
+  const accessDenied = params.error === "AccessDenied";
+  const sessionProvider = accessDenied ? await getSessionProvider() : null;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -24,19 +68,8 @@ async function LoginError({
       >
         No se pudo completar el inicio de sesión. Inténtalo de nuevo.
       </p>
-      {canRequestGoogleAccess ? (
-        <>
-          <p className="login-page__copy max-w-md text-sm">
-            Puedes consultar tu identificador durante los próximos 2 minutos.
-            Si pasa ese tiempo, vuelve a intentarlo con Google.
-          </p>
-          <Link
-            className="login-page__back text-sm underline underline-offset-4"
-            href="/login/request-access"
-          >
-            Consultar mi identificador Google para solicitar acceso
-          </Link>
-        </>
+      {accessDenied ? (
+        <AccessDeniedHelp sessionProvider={sessionProvider} />
       ) : null}
     </div>
   );
