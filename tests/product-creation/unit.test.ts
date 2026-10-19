@@ -291,6 +291,101 @@ test("recognizes only Prisma unique violations that identify the Product SKU", (
   assert.equal(isSkuUniqueViolation({}), false);
 });
 
+// Shape built by @prisma/client 7.10.1 for a @prisma/adapter-pg 23505 error:
+// meta carries the adapter error (and its table), not `target`.
+function adapterUniqueMeta(
+  index: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    ...extra,
+    table: "Product",
+    driverAdapterError: {
+      name: "DriverAdapterError",
+      cause: {
+        originalCode: "23505",
+        kind: "UniqueConstraintViolation",
+        constraint: { index },
+        table: "Product",
+      },
+    },
+  };
+}
+
+test("recognizes the adapter-pg UNIQUE violation shape for the SKU index only", () => {
+  assert.equal(isSkuUniqueViolation(adapterUniqueMeta("Product_sku_key")), true);
+  assert.equal(
+    isSkuUniqueViolation(
+      adapterUniqueMeta("Product_sku_key", { modelName: "Product" }),
+    ),
+    true,
+  );
+  assert.equal(
+    isSkuUniqueViolation(adapterUniqueMeta("Product_seedKey_key")),
+    false,
+  );
+  assert.equal(
+    isSkuUniqueViolation(
+      adapterUniqueMeta("Product_sku_key", { modelName: "Customer" }),
+    ),
+    false,
+  );
+  assert.equal(
+    isSkuUniqueViolation({ driverAdapterError: { cause: { constraint: { fields: ["sku"] } } } }),
+    false,
+  );
+});
+
+test("maps an adapter-pg SKU violation to SKU field feedback and keeps other indexes generic", async () => {
+  const skuResult = await handleCreateProductAction(formData(), {
+    async requireSession() {},
+    async create() {
+      throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+        code: "P2002",
+        clientVersion: "test",
+        meta: adapterUniqueMeta("Product_sku_key"),
+      });
+    },
+    revalidate() {
+      assert.fail("A duplicate SKU must not revalidate.");
+    },
+  });
+  assert.equal(skuResult.status, "error");
+  if (skuResult.status === "error") {
+    assert.equal(
+      skuResult.fieldErrors.sku,
+      "Ese SKU ya está en uso y no se puede reutilizar.",
+    );
+    assert.doesNotMatch(skuResult.message, /constraint|Product_sku_key/);
+  }
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  let otherResult: CreateProductActionState;
+  try {
+    otherResult = await handleCreateProductAction(formData(), {
+      async requireSession() {},
+      async create() {
+        throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+          code: "P2002",
+          clientVersion: "test",
+          meta: adapterUniqueMeta("Product_seedKey_key"),
+        });
+      },
+      revalidate() {
+        assert.fail("An unsuccessful create must not revalidate.");
+      },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(otherResult.status, "error");
+  if (otherResult.status === "error") {
+    assert.deepEqual(otherResult.fieldErrors, {});
+    assert.match(otherResult.message, /No se pudo crear/);
+  }
+});
+
 test("returns field errors for an active or soft-deleted duplicate SKU", async () => {
   for (const existingType of ["active", "soft-deleted"]) {
     const error = new ProductCreationError(

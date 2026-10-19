@@ -119,12 +119,25 @@ export async function handleCreateProductAction(
   return { status: "success", sku: created.sku };
 }
 
+function adapterConstraintIndex(meta: Record<string, unknown> | undefined): unknown {
+  const adapterError = meta?.driverAdapterError;
+  if (typeof adapterError !== "object" || adapterError === null) return undefined;
+  const cause = (adapterError as { cause?: unknown }).cause;
+  if (typeof cause !== "object" || cause === null) return undefined;
+  const constraint = (cause as { constraint?: unknown }).constraint;
+  if (typeof constraint !== "object" || constraint === null) return undefined;
+  return (constraint as { index?: unknown }).index;
+}
+
+// Recognizes both the classic `target` metadata and the shape reported by
+// @prisma/adapter-pg (`driverAdapterError.cause.constraint.index`).
 export function isSkuUniqueViolation(
   meta: Record<string, unknown> | undefined,
 ): boolean {
   if (meta?.modelName !== undefined && meta.modelName !== "Product") {
     return false;
   }
+  if (adapterConstraintIndex(meta) === "Product_sku_key") return true;
   const target = meta?.target;
   if (Array.isArray(target)) {
     return target.length === 1 && target[0] === "sku";

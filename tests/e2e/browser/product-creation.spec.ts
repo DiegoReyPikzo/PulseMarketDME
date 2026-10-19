@@ -20,10 +20,18 @@ function readFixtureSkus(): ProductFixtureSkus {
   const encoded = process.env.PULSEMARKET_E2E_PRODUCT_SKUS;
   if (!encoded) throw new Error("E2E product fixture identifiers are missing.");
   const parsed: unknown = JSON.parse(encoded);
-  if (!isStringArray(parsed) || parsed.length !== 3) {
+  if (!isStringArray(parsed) || parsed.length !== 9) {
     throw new Error("E2E product fixture identifiers are invalid.");
   }
-  const [zeroPrice, duplicate, invalid] = parsed;
+  // The suite also carries product-delete.spec.ts fixtures; take this spec's
+  // own SKUs by suffix (each must appear exactly once).
+  const bySuffix = (suffix: string) => {
+    const matches = parsed.filter((sku) => sku.endsWith(`-${suffix}`));
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const zeroPrice = bySuffix("ZERO");
+  const duplicate = bySuffix("DUP");
+  const invalid = bySuffix("INVALID");
   if (
     !zeroPrice ||
     !duplicate ||

@@ -356,13 +356,16 @@ token. A successful create revalidates and refreshes the current listing
 without changing its filters, sort, or page, so the new product may not appear
 in the current view.
 
-Known limitation (pending, independent of the customer work): the product
-creation and edit handlers recognize a SKU `UNIQUE` violation only through
-Prisma's `target` metadata. With `@prisma/adapter-pg` the violation is
-reported under `driverAdapterError.cause.constraint.index`, so two requests
-racing for the same SKU still persist only one product, but the losing
-request shows the generic error instead of the SKU field error. The
-non-racing duplicate case is caught earlier by the SKU lookup.
+The non-racing duplicate case is caught earlier by the SKU lookup. A SKU
+`UNIQUE` violation raised by the write itself (two requests racing for the
+same SKU) is mapped to the SKU field error by both the creation and edit
+handlers. They recognize Prisma's `target` metadata and the shape reported by
+`@prisma/adapter-pg` (`driverAdapterError.cause.constraint.index` equal to
+`Product_sku_key`); a violation of any other index keeps the generic error.
+Unit tests cover both metadata shapes. A real race against PostgreSQL has not
+been verified yet: in particular, creation runs in a serializable transaction,
+so the losing request may instead receive a serialization failure, which
+shows the retry message.
 
 Run the creation checks with:
 
@@ -695,8 +698,8 @@ npm.cmd run e2e:product-edit
 ```
 
 Each product suite uses one exact set of run-unique fixture SKUs (`ZERO`,
-`DUP`, `INVALID`; `DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`,
-`EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
+`DUP`, `INVALID`, `DEL-A1`–`DEL-A3`, `DEL-B1`, `DEL-B2`, `DEL-C1`;
+`DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`, `EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
 and the IDs the suite registered.
 
 Run customer browser tests with:
@@ -732,7 +735,13 @@ OAuth, generic accessible failure after provider denial, and sign-out
 protection after reload. Playwright reporters are list-only; trace, screenshots,
 video, cookies and storage-state output are disabled or ignored. The suite
 covers product creation, zero-price persistence, duplicate SKU rejection and
-server-side decimal validation. Product runs use unique SKUs, record created
+server-side decimal validation. It also covers catalog deletion: a confirmed
+bulk deletion soft-deletes two products and keeps a third (checked in the UI,
+after a reload, and in the database, where the deleted rows remain with
+`deletedAt` set), and cancelled bulk and individual deletions send no request
+and leave the products intact. Each deletion case uses its own fixtures and
+lists only them by searching its SKU prefix. Confirmed individual deletion is
+covered by the product edit suite. Product runs use unique SKUs, record created
 product IDs under the ignored `.playwright-e2e` directory, and remove only those
 IDs in the runner's finalization block. A second cleanup lookup is restricted
 to the run's exact unique SKUs. The runner then repeats the read-only preflight.

@@ -458,6 +458,59 @@ test("maps domain errors and SKU unique violations, and revalidates only after s
     console.error = originalConsoleError;
   }
 
+  // Shape built by @prisma/client 7.10.1 for a @prisma/adapter-pg 23505 error.
+  const adapterViolation = (index: string) =>
+    new Prisma.PrismaClientKnownRequestError("unique", {
+      code: "P2002",
+      clientVersion: "test",
+      meta: {
+        table: "Product",
+        driverAdapterError: {
+          name: "DriverAdapterError",
+          cause: {
+            originalCode: "23505",
+            kind: "UniqueConstraintViolation",
+            constraint: { index },
+            table: "Product",
+          },
+        },
+      },
+    });
+  const adapterDuplicate = await handleUpdateProductAction(changed, {
+    ...base,
+    update: async () => {
+      throw adapterViolation("Product_sku_key");
+    },
+  });
+  assert.equal(
+    adapterDuplicate.status === "error" && adapterDuplicate.code,
+    "DUPLICATE_SKU",
+  );
+  assert.equal(
+    adapterDuplicate.status === "error" && adapterDuplicate.fieldErrors.sku,
+    "Ese SKU ya está en uso y no se puede reutilizar.",
+  );
+
+  console.error = () => {};
+  try {
+    const adapterUnrelated = await handleUpdateProductAction(changed, {
+      ...base,
+      update: async () => {
+        throw adapterViolation("Product_seedKey_key");
+      },
+    });
+    assert.equal(
+      adapterUnrelated.status === "error" && adapterUnrelated.code,
+      "UNKNOWN",
+    );
+    assert.deepEqual(
+      adapterUnrelated.status === "error" && adapterUnrelated.fieldErrors,
+      {},
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+
   const unchanged = await handleUpdateProductAction(formData(), {
     ...base,
     update: async () => ({ status: "unchanged", sku: "SKU-1" }),
