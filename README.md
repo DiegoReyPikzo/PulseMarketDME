@@ -34,15 +34,54 @@ Regenerate the client after schema changes with:
 npx.cmd prisma generate
 ```
 
-Apply the deterministic sample data with:
+### Sample data (seed v2)
+
+The seed (`prisma/seed.ts`, data in `prisma/seed-data.ts`) creates 12,000
+correlated records across products, customers and sales, plus their sale
+items:
+
+| Records | Total | Detail |
+|---|---|---|
+| Products | 1,000 | 950 active, 50 soft-deleted; 10 categories |
+| Customers | 3,000 | 2,910 active, 90 soft-deleted; every customer has 2–3 sales |
+| Sales | 8,000 | 5,600 `COMPLETED`, 800 `PENDING`, 800 `CANCELLED`, 800 `REFUNDED` |
+| Sale items | 24,000 | 1,600 sales each with 1, 2, 3, 4 and 5 distinct products |
+
+Unit prices equal the product price, line totals equal unit price × quantity,
+and sale totals equal the sum of their lines (exact `Decimal` cents).
+
+Every timestamp derives from the fixed reference date 2026-10-17 (UTC), never
+from the run date. Sales fall between 2024-10-18T00:37Z and 2026-10-17T19:30Z;
+products and customers are created on 2024-10-01–04; soft deletions are dated
+2026-10-18T00:00Z, after every sale. The dashboard's default analytics range
+(the last 30 days before today) contains sample sales only while today is on
+or before 2026-11-15; use explicit ranges for repeatable measurements.
+
+v2 records use their own IDs, `seedKey` prefix `pulsemarket-seed-v2:`, SKUs
+(`PM2-…`) and emails (`customer-v2-…`), so they never collide with v1 sample
+data. The seed only inserts: it never updates, upserts or deletes, and it does
+not skip duplicates. In one serializable transaction it checks for conflicts,
+inserts the missing v2 rows in batches sized from the inserted column count,
+reads them back, verifies counts, relations, totals and dates, and compares a
+hash of every non-v2 row before and after. Existing identical v2 rows are kept;
+a v2 row with different content, or another row holding a v2 ID, seed key, SKU
+or email, aborts the run and rolls everything back.
+
+The seed refuses to run in CI, inside the production wrapper, with `E2E_*`
+variables set, or against the Production or E2E endpoints (direct or pooled,
+read from `.env.production.target.local` and `.env.e2e.target.local`; if
+either file is missing it refuses too). Run it only against an isolated Neon
+branch, confirming that branch's host explicitly:
 
 ```powershell
+$env:DATABASE_URL = "<pooled URL of the isolated branch>"
+$env:PULSEMARKET_SEED_TARGET_HOST = "<host of that URL>"
 npx.cmd prisma db seed
 ```
 
-The seed creates 100 products, 500 customers, 2,000 sales, and 8,000 sale
-items (10,600 records total). Its fixed IDs and unique seed keys make repeated
-runs safe; it inserts only these records and never deletes existing data.
+Errors and output name tables, counts and the endpoint ID only, never
+connection strings. Offline checks of the generator, the guard and the seed's
+control flow run with `npm.cmd run test:production-tooling`.
 
 ## Server-side list queries
 
@@ -568,13 +607,14 @@ query.
 npm.cmd run db:analytics-benchmark
 ```
 
-To inspect a populated seeded interval, pass a valid range explicitly:
+To inspect a populated interval of the v2 sample data, pass a valid range
+explicitly, for example the 30 days ending on its reference date:
 
 ```powershell
-npm.cmd run db:analytics-benchmark -- --from=2024-01-01 --to=2024-01-30
+npm.cmd run db:analytics-benchmark -- --from=2026-09-18 --to=2026-10-17
 ```
 
-The measured first query in a new Node process still exceeds the 400 ms
+With the earlier v1 sample data, the measured first query in a new Node process still exceeds the 400 ms
 target: recent default-range runs took 640.09–743.17 ms initially, while the
 20 subsequent queries had medians of 222.59–223.82 ms and maxima of
 234.07–239.99 ms. A new application process does not prove that the database
