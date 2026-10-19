@@ -4,10 +4,11 @@ import { test, vi } from "vitest";
 
 // The pages are imported, never rendered: only the Suspense element they return
 // is inspected. "server-only" is neutralized so their server modules can load
-// in this client test environment, and Prisma is replaced so importing them
-// cannot open a database connection.
+// in this client test environment, and the Prisma clients (shared and
+// analytics) are replaced so importing them cannot open a database connection.
 vi.mock("server-only", () => ({}));
 vi.mock("../../lib/prisma", () => ({ prisma: {} }));
+vi.mock("../../lib/analytics/analytics-prisma", () => ({ analyticsPrisma: {} }));
 
 import {
   CustomersFallback,

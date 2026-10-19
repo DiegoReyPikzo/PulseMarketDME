@@ -5,15 +5,14 @@ import {
   getDashboardAnalytics,
   type DashboardAnalyticsPhase,
 } from "../lib/analytics/dashboard";
+import { analyticsPrisma } from "../lib/analytics/analytics-prisma";
 import { parseDashboardAnalyticsRange } from "../lib/analytics/range";
 import { createDashboardAnalyticsQuery } from "../lib/analytics/query";
 import { prisma } from "../lib/prisma";
 
 const measuredRuns = 20;
 const phases: readonly DashboardAnalyticsPhase[] = [
-  "transaction_establishment",
-  "analytics_query",
-  "transaction_completion",
+  "database_call",
   "result_processing",
   "total",
 ];
@@ -170,13 +169,6 @@ async function main(): Promise<void> {
         summarize(subsequentRuns.map((run) => run[phase])),
       ]),
     );
-    const estimatedFinalization = (run: TimedRun) =>
-      Math.max(
-        0,
-        run.transaction_completion -
-          run.transaction_establishment -
-          run.analytics_query,
-      );
     const plans = await explainQueries();
 
     console.log(
@@ -190,15 +182,9 @@ async function main(): Promise<void> {
               Number(firstRun[phase].toFixed(2)),
             ]),
           ),
-          firstTransactionFinalizationEstimateMs: Number(
-            estimatedFinalization(firstRun).toFixed(2),
-          ),
           subsequentQueriesInSameProcess: {
             runs: measuredRuns,
             phases: subsequentByPhase,
-            transactionFinalizationEstimate: summarize(
-              subsequentRuns.map(estimatedFinalization),
-            ),
           },
           explainAnalyzeAfterTiming: plans,
         },
@@ -207,7 +193,14 @@ async function main(): Promise<void> {
       ),
     );
   } finally {
-    await prisma.$disconnect();
+    // Timed calls use the analytics client; EXPLAIN and index reads use the
+    // shared client. Close both.
+    const closed = await Promise.allSettled([
+      analyticsPrisma.$disconnect(),
+      prisma.$disconnect(),
+    ]);
+    const failure = closed.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
   }
 }
 

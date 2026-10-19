@@ -577,12 +577,31 @@ current count where `deletedAt IS NULL`, independent of the selected period.
 The summary does not assign a currency to monetary values.
 
 The totals, average, current active-product count, and daily PostgreSQL
-aggregate are read in one repeatable-read transaction. Decimal calculations
+aggregate are read by one SQL statement, so they come from a single database
+snapshot without an explicit transaction. Decimal calculations
 remain exact; amounts and averages are returned as strings. Days with no
 completed sales are returned with zero amount and count. The page refreshes
 when requested, every 60 seconds while visible, and when the tab becomes
 visible again; this is periodic polling, not strict real-time data. Failed
 refreshes retain the last successful data and identify it as potentially stale.
+
+The aggregate query runs on a dedicated Prisma client and `pg` pool
+(`lib/analytics/analytics-prisma.ts`); the shared client in `lib/prisma.ts` is
+unchanged and no other route uses the analytics client. It sets two client-side
+wait limits:
+
+- `connectionTimeoutMillis` (2,000 ms): waiting for a pooled connection or
+  opening a new one. The pool removes the request from its queue, or destroys
+  the socket of a connection still being opened, and the call fails.
+- `query_timeout` (5,000 ms): how long the `pg` client waits for the query
+  result. The call fails in JavaScript, but no cancel request is sent, so
+  PostgreSQL may keep running the statement.
+
+No server-side `statement_timeout` is set. These limits replace the waiting
+behavior of the former explicit transaction but are not equivalent to its
+`maxWait`/`timeout`, and they say nothing about the 400 ms target. The second
+pool keeps `pg-pool` defaults (`max` 10, `idleTimeoutMillis` 10,000 ms): up to
+10 more connections per process, and an idle connection closes after 10 s.
 
 Unit tests cover UTC boundaries, parameter validation, the 366-day limit,
 zero-filled dates, and refresh policy. Analytics integration tests create their
@@ -595,11 +614,10 @@ npm.cmd run test:analytics:integration
 ```
 
 Measure the first query in a fresh Node process separately from 20 subsequent
-queries in that process. The benchmark reports transaction establishment, the
-combined aggregate query, transaction completion, local result processing,
-and `EXPLAIN (ANALYZE, BUFFERS)` for the same parameterized SQL. Establishment
-includes pool acquisition and any connection setup plus transaction start;
-query timings include driver/network round trips and database response. Result
+queries in that process. The benchmark reports the database call, local result
+processing, the total, and `EXPLAIN (ANALYZE, BUFFERS)` for the same
+parameterized SQL. The database call includes pool acquisition and any
+connection setup, driver/network round trips, and the database response. Result
 processing is local. The benchmark excludes authentication, the HTTP request,
 React rendering, and browser/network latency. A new Node process does not imply
 a cold database or cold provider compute. Explain plans and index definitions
@@ -617,13 +635,28 @@ explicitly, for example the 30 days ending on its reference date:
 npm.cmd run db:analytics-benchmark -- --from=2026-09-18 --to=2026-10-17
 ```
 
-With the earlier v1 sample data, the measured first query in a new Node process still exceeds the 400 ms
-target: recent default-range runs took 640.09–743.17 ms initially, while the
-20 subsequent queries had medians of 222.59–223.82 ms and maxima of
-234.07–239.99 ms. A new application process does not prove that the database
-compute or its caches were cold. The initial-query target remains open; these
-measurements do not isolate connection-pool acquisition from transaction
-startup.
+Measured earlier with the v1 sample data, when the query still ran inside an
+explicit repeatable-read transaction, the first query in a new Node process
+exceeded the 400 ms target: recent default-range runs took 640.09–743.17 ms
+initially, while the 20 subsequent queries had medians of 222.59–223.82 ms and
+maxima of 234.07–239.99 ms. A new application process does not prove that the
+database compute or its caches were cold.
+
+The single-statement path was then measured against an isolated Neon branch
+holding the v2 sample data, in nine fresh Node processes (three per explicit
+range). Values are this benchmark's `total` phase, at function level; they are
+not HTTP or Production measurements.
+
+| Range | First query (ms) | Subsequent medians (ms) | Subsequent maxima (ms) |
+|---|---|---|---|
+| 2026-09-18 to 2026-10-17 | 1182.50 / 1664.98 / 488.69 | 61.01 / 61.65 / 60.66 | 89.45 / 62.98 / 62.36 |
+| 2025-10-17 to 2026-10-17 | 1800.46 / 564.19 / 551.84 | 65.16 / 67.51 / 65.89 | 69.20 / 261.67 / 69.34 |
+| 2026-09-19 to 2026-10-18 | 1717.76 / 486.19 / 488.64 | 61.51 / 60.18 / 61.15 | 68.42 / 61.85 / 62.78 |
+
+All 180 subsequent queries stayed under 400 ms; all nine first queries
+exceeded it. The 400 ms requirement remains open: the first query in a new
+process still exceeds it, and the cause of those slow first queries has not
+been attributed.
 
 ## E2E database environment preparation
 
