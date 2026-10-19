@@ -83,6 +83,14 @@ Errors and output name tables, counts and the endpoint ID only, never
 connection strings. Offline checks of the generator, the guard and the seed's
 control flow run with `npm.cmd run test:production-tooling`.
 
+Production is never seeded by `prisma db seed`. It can receive the same v2
+data only through the operator-only production wrapper,
+`npm.cmd run prod:db -- seed-v2`. That path requires the verified endpoint,
+a declared backup branch, and the baseline of the existing rows. It checks the
+connected identity and that baseline inside the transaction, and then runs the
+unchanged `runSeedTransaction`. The procedure, what it verifies, and recovery
+are in [docs/production-seed-v2.md](docs/production-seed-v2.md).
+
 ## Server-side list queries
 
 The server-only functions `listProducts`, `listCustomers`, and `listSales`
