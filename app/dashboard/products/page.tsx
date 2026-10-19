@@ -10,6 +10,7 @@ import {
 } from "../../../lib/dashboard/list-params";
 import { productListInputSchema } from "../../../lib/queries/inputs";
 import { listProducts } from "../../../lib/queries/products";
+import { logListingTiming, now } from "../../../lib/perf-log";
 import { DashboardShell } from "../dashboard-shell";
 import { ProductCatalog } from "./product-catalog";
 import { ProductCreationForm } from "./product-creation-form";
@@ -27,8 +28,13 @@ type ProductsPageProps = {
 };
 
 async function ProductsListing({ searchParams }: ProductsPageProps) {
+  // Temporary timing (lib/perf-log.ts); remove with that module.
+  const started = now();
   await connection();
+  const connectionMs = now() - started;
+  const sessionStarted = now();
   const session = await getAuthenticatedSession();
+  const sessionMs = now() - sessionStarted;
   const params = await searchParams;
   const parsed = parseListSearchParams(productListInputSchema, params);
 
@@ -55,7 +61,22 @@ async function ProductsListing({ searchParams }: ProductsPageProps) {
   }
 
   const input = parsed.data;
+  const listStarted = now();
   const result = await listProducts(input);
+  const listMs = now() - listStarted;
+  logListingTiming({
+    route: "/dashboard/products",
+    connectionMs,
+    sessionMs,
+    listMs,
+    dataReadyMs: now() - started,
+    page: input.page,
+    pageSize: input.pageSize,
+    sortBy: input.sortBy,
+    sortOrder: input.sortOrder,
+    filtered: Boolean(input.search || input.category),
+    rows: result.items.length,
+  });
   const allowReorder =
     !input.search &&
     !input.category &&
