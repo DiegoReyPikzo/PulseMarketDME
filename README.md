@@ -356,13 +356,16 @@ token. A successful create revalidates and refreshes the current listing
 without changing its filters, sort, or page, so the new product may not appear
 in the current view.
 
-Known limitation (pending, independent of the customer work): the product
-creation and edit handlers recognize a SKU `UNIQUE` violation only through
-Prisma's `target` metadata. With `@prisma/adapter-pg` the violation is
-reported under `driverAdapterError.cause.constraint.index`, so two requests
-racing for the same SKU still persist only one product, but the losing
-request shows the generic error instead of the SKU field error. The
-non-racing duplicate case is caught earlier by the SKU lookup.
+The non-racing duplicate case is caught earlier by the SKU lookup. A SKU
+`UNIQUE` violation raised by the write itself (two requests racing for the
+same SKU) is mapped to the SKU field error by both the creation and edit
+handlers. They recognize Prisma's `target` metadata and the shape reported by
+`@prisma/adapter-pg` (`driverAdapterError.cause.constraint.index` equal to
+`Product_sku_key`); a violation of any other index keeps the generic error.
+Unit tests cover both metadata shapes. A real race against PostgreSQL has not
+been verified yet: in particular, creation runs in a serializable transaction,
+so the losing request may instead receive a serialization failure, which
+shows the retry message.
 
 Run the creation checks with:
 
