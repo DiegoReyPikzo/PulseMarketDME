@@ -2,6 +2,8 @@
 
 import { signIn } from "next-auth/react";
 
+import { rememberLoginProvider } from "./access-denied-help";
+
 export function OAuthSignInButton({
   providerId,
   label,
@@ -12,7 +14,10 @@ export function OAuthSignInButton({
   return (
     <button
       className="login-page__provider-button min-h-12 w-full rounded-lg px-5 py-3 font-medium"
-      onClick={() => void signIn(providerId, { callbackUrl: "/dashboard" })}
+      onClick={() => {
+        rememberLoginProvider(providerId);
+        void signIn(providerId, { callbackUrl: "/dashboard" });
+      }}
       type="button"
     >
       {label}
