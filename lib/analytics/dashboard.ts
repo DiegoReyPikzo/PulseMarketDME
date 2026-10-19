@@ -1,7 +1,7 @@
 import "server-only";
 
 import { Prisma } from "../../generated/prisma/client";
-import { prisma } from "../prisma";
+import { analyticsPrisma } from "./analytics-prisma";
 import {
   createDailySeries,
   type DashboardAnalyticsRange,
@@ -30,9 +30,7 @@ type DailyAggregateRow = {
 };
 
 export type DashboardAnalyticsPhase =
-  | "transaction_establishment"
-  | "analytics_query"
-  | "transaction_completion"
+  | "database_call"
   | "result_processing"
   | "total";
 
@@ -41,31 +39,21 @@ export async function getDashboardAnalytics(
   onTiming?: (phase: DashboardAnalyticsPhase, milliseconds: number) => void,
 ): Promise<DashboardAnalytics> {
   const requestStartedAt = performance.now();
-  const transactionStartedAt = performance.now();
 
-  const snapshot = await prisma.$transaction(
-    async (transaction) => {
-      onTiming?.(
-        "transaction_establishment",
-        performance.now() - transactionStartedAt,
-      );
-      const queryStartedAt = performance.now();
-      const rows = await transaction.$queryRaw<DailyAggregateRow[]>(
-        createDashboardAnalyticsQuery(range),
-      );
-      onTiming?.("analytics_query", performance.now() - queryStartedAt);
-      const summary = rows[0];
-      if (!summary) {
-        throw new Error("La consulta agregada no devolvió los días del período.");
-      }
-      return { summary, rows };
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  // A single statement: PostgreSQL evaluates all of its CTEs against one
+  // snapshot, so the daily series, the summary and the active product count
+  // stay mutually consistent without an explicit transaction.
+  const callStartedAt = performance.now();
+  const rows = await analyticsPrisma.$queryRaw<DailyAggregateRow[]>(
+    createDashboardAnalyticsQuery(range),
   );
-  onTiming?.(
-    "transaction_completion",
-    performance.now() - transactionStartedAt,
-  );
+  // Includes acquiring a pooled connection (and opening one if needed).
+  onTiming?.("database_call", performance.now() - callStartedAt);
+  const summary = rows[0];
+  if (!summary) {
+    throw new Error("La consulta agregada no devolvió los días del período.");
+  }
+  const snapshot = { summary, rows };
 
   const processingStartedAt = performance.now();
   const result = {

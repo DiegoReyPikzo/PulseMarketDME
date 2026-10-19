@@ -16,7 +16,7 @@
     "test:integration": "vitest run --mode integration tests/queries/integration.test.ts",
     "test:mutations:unit": "vitest run tests/catalog-mutations/unit.test.ts tests/catalog-mutations/client-validation.test.ts tests/catalog-mutations/bulk-form.test.tsx",
     "test:mutations:integration": "vitest run --mode integration tests/catalog-mutations/integration.test.ts",
-    "test:analytics:unit": "vitest run tests/analytics/unit.test.ts",
+    "test:analytics:unit": "vitest run tests/analytics/unit.test.ts tests/analytics/dashboard.unit.test.ts tests/analytics/analytics-prisma.unit.test.ts",
     "test:analytics:integration": "vitest run --mode integration tests/analytics/integration.test.ts",
     "test:product-creation:unit": "vitest run tests/product-creation/unit.test.ts tests/product-creation/client-validation.test.ts tests/product-creation/form.test.tsx",
     "test:product-creation:integration": "vitest run --mode integration tests/product-creation/integration.test.ts",

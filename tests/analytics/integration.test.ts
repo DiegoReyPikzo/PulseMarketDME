@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { afterAll, test } from "vitest";
 
 import { Prisma, SaleStatus } from "../../generated/prisma/client";
+import { analyticsPrisma } from "../../lib/analytics/analytics-prisma";
 import { getDashboardAnalytics } from "../../lib/analytics/dashboard";
+import { createDashboardAnalyticsQuery } from "../../lib/analytics/query";
 import { prisma } from "../../lib/prisma";
 
 const customerIds: string[] = [];
@@ -39,7 +41,11 @@ afterAll(async () => {
       assert.equal(result.count, customerIds.length);
     }
   } finally {
-    await prisma.$disconnect();
+    // getDashboardAnalytics uses the dedicated analytics client; fixtures and
+    // the equality check use the shared one. Close both.
+    const closed = await Promise.allSettled([analyticsPrisma.$disconnect(), prisma.$disconnect()]);
+    const failure = closed.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
   }
 });
 
@@ -184,5 +190,37 @@ test("returns zero totals, null average, and a complete zero-filled series witho
   assert.deepEqual(analytics.daily, [
     { date: "2099-01-01", amount: "0.00", salesCount: 0 },
     { date: "2099-01-02", amount: "0.00", salesCount: 0 },
+  ]);
+});
+
+test("the single statement returns the same rows with and without a repeatable-read transaction", async () => {
+  const customerId = await createCustomer();
+  await createProduct(false);
+  await createProduct(true);
+  const from = "2032-03-01";
+  const to = "2032-03-03";
+  await createSale(customerId, SaleStatus.COMPLETED, "12.34", new Date("2032-03-01T00:00:00.000Z"));
+  await createSale(customerId, SaleStatus.COMPLETED, "0.01", new Date("2032-03-03T23:59:59.999Z"));
+  await createSale(customerId, SaleStatus.REFUNDED, "99.99", new Date("2032-03-02T12:00:00.000Z"));
+  await createSale(customerId, SaleStatus.COMPLETED, "50.00", new Date("2032-03-04T00:00:00.000Z"));
+
+  for (const range of [{ from, to }, { from: "2099-01-01", to: "2099-01-02" }]) {
+    // The previous path: the same statement inside an explicit RepeatableRead
+    // transaction, as getDashboardAnalytics ran it before.
+    const transactional = await prisma.$transaction(
+      (transaction) => transaction.$queryRaw<unknown[]>(createDashboardAnalyticsQuery(range)),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    const direct = await prisma.$queryRaw<unknown[]>(createDashboardAnalyticsQuery(range));
+    assert.deepEqual(direct, transactional);
+  }
+
+  const analytics = await getDashboardAnalytics({ from, to });
+  assert.equal(analytics.completedSalesAmount, "12.35");
+  assert.equal(analytics.completedSalesCount, 2);
+  assert.deepEqual(analytics.daily, [
+    { date: from, amount: "12.34", salesCount: 1 },
+    { date: "2032-03-02", amount: "0.00", salesCount: 0 },
+    { date: to, amount: "0.01", salesCount: 1 },
   ]);
 });
