@@ -244,6 +244,12 @@ async function main(): Promise<void> {
         `PME2E-${productRunId}-ZERO`,
         `PME2E-${productRunId}-DUP`,
         `PME2E-${productRunId}-INVALID`,
+        `PME2E-${productRunId}-DEL-A1`,
+        `PME2E-${productRunId}-DEL-A2`,
+        `PME2E-${productRunId}-DEL-A3`,
+        `PME2E-${productRunId}-DEL-B1`,
+        `PME2E-${productRunId}-DEL-B2`,
+        `PME2E-${productRunId}-DEL-C1`,
       ];
   const productRegistry = resolve(
     ".playwright-e2e",
@@ -305,17 +311,20 @@ async function main(): Promise<void> {
       [
         "@playwright/test",
         "test",
-        productSuite
-          ? "tests/e2e/browser/product-creation.spec.ts"
+        ...(productSuite
+          ? [
+              "tests/e2e/browser/product-creation.spec.ts",
+              "tests/e2e/browser/product-delete.spec.ts",
+            ]
           : reorderSuite
-            ? "tests/e2e/browser/product-reorder.spec.ts"
+            ? ["tests/e2e/browser/product-reorder.spec.ts"]
             : productEditSuite
-              ? "tests/e2e/browser/product-edit.spec.ts"
+              ? ["tests/e2e/browser/product-edit.spec.ts"]
               : customerSuite
-              ? "tests/e2e/browser/customers.spec.ts"
+              ? ["tests/e2e/browser/customers.spec.ts"]
               : googleDenialSuite
-              ? "tests/e2e/browser/google-access-request.spec.ts"
-              : "tests/e2e/browser/auth.spec.ts",
+              ? ["tests/e2e/browser/google-access-request.spec.ts"]
+              : ["tests/e2e/browser/auth.spec.ts"]),
         "--config=playwright.config.ts",
         ...runnerArguments,
       ],

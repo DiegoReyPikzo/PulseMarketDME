@@ -698,8 +698,8 @@ npm.cmd run e2e:product-edit
 ```
 
 Each product suite uses one exact set of run-unique fixture SKUs (`ZERO`,
-`DUP`, `INVALID`; `DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`,
-`EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
+`DUP`, `INVALID`, `DEL-A1`–`DEL-A3`, `DEL-B1`, `DEL-B2`, `DEL-C1`;
+`DRAG-1`–`DRAG-3`; or `EDIT-A`, `EDIT-B`, `EDIT-C`, `EDIT-R`). Cleanup rejects any other combination and removes only those SKUs
 and the IDs the suite registered.
 
 Run customer browser tests with:
@@ -735,7 +735,13 @@ OAuth, generic accessible failure after provider denial, and sign-out
 protection after reload. Playwright reporters are list-only; trace, screenshots,
 video, cookies and storage-state output are disabled or ignored. The suite
 covers product creation, zero-price persistence, duplicate SKU rejection and
-server-side decimal validation. Product runs use unique SKUs, record created
+server-side decimal validation. It also covers catalog deletion: a confirmed
+bulk deletion soft-deletes two products and keeps a third (checked in the UI,
+after a reload, and in the database, where the deleted rows remain with
+`deletedAt` set), and cancelled bulk and individual deletions send no request
+and leave the products intact. Each deletion case uses its own fixtures and
+lists only them by searching its SKU prefix. Confirmed individual deletion is
+covered by the product edit suite. Product runs use unique SKUs, record created
 product IDs under the ignored `.playwright-e2e` directory, and remove only those
 IDs in the runner's finalization block. A second cleanup lookup is restricted
 to the run's exact unique SKUs. The runner then repeats the read-only preflight.

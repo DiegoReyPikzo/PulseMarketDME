@@ -16,7 +16,17 @@ function isStringArray(value: unknown): value is string[] {
 // Each product suite owns one exact set of SKU suffixes, all sharing a single
 // run ID; any other combination is rejected.
 const FIXTURE_SUFFIX_SETS: readonly (readonly string[])[] = [
-  ["ZERO", "DUP", "INVALID"],
+  [
+    "ZERO",
+    "DUP",
+    "INVALID",
+    "DEL-A1",
+    "DEL-A2",
+    "DEL-A3",
+    "DEL-B1",
+    "DEL-B2",
+    "DEL-C1",
+  ],
   ["DRAG-1", "DRAG-2", "DRAG-3"],
   ["EDIT-A", "EDIT-B", "EDIT-C", "EDIT-R"],
 ];
@@ -29,7 +39,9 @@ function readFixtureSkus(): string[] {
     throw new Error("E2E product fixture identifiers are invalid.");
   }
   const matches = parsed.map((sku) =>
-    /^PME2E-([a-f0-9]{32})-((?:ZERO|DUP|INVALID|DRAG-[123]|EDIT-[ABCR]))$/.exec(sku),
+    /^PME2E-([a-f0-9]{32})-((?:ZERO|DUP|INVALID|DEL-(?:A[123]|B[12]|C1)|DRAG-[123]|EDIT-[ABCR]))$/.exec(
+      sku,
+    ),
   );
   const runIds = new Set(matches.map((match) => match?.[1]));
   const suffixes = matches.map((match) => match?.[2]);
