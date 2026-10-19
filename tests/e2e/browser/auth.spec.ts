@@ -375,6 +375,45 @@ test("shows a generic accessible error after provider denial and creates no sess
   await expect(page).toHaveURL(/\/login(?:\?.*)?$/);
 });
 
+// Flow 1 of the project guidelines as one continuous journey in a single
+// browser context: a denied sign-in shows the error, then a new authorized
+// attempt from that same screen lands in the protected dashboard.
+test("recovers from a denied sign-in with an authorized attempt and opens the protected dashboard", async ({
+  page,
+  context,
+}) => {
+  const sessionCookies = async () =>
+    (await context.cookies()).filter(({ name }) => name.includes("session-token"));
+
+  await page.goto("/login");
+  await authorizeWithLocalProvider(page);
+  await page.getByRole("button", { name: "Denegar acceso" }).click();
+
+  const error = page.getByText(
+    "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",
+    { exact: true },
+  );
+  await expect(error).toHaveAttribute("role", "alert");
+  await expect(page).toHaveURL(/\/login(?:\?.*)?$/);
+  expect(await sessionCookies()).toHaveLength(0);
+
+  // Second attempt from the error screen, without reloading or navigating.
+  await authorizeWithLocalProvider(page);
+  await page.getByRole("button", { name: "Autorizar PulseMarket" }).click();
+
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("banner").getByText("E2E Test User")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
+  await expect(error).toHaveCount(0);
+  const cookies = await sessionCookies();
+  expect(cookies).toHaveLength(1);
+  expect(cookies[0].httpOnly).toBe(true);
+
+  await page.getByRole("link", { name: "Productos" }).first().click();
+  await expect(page).toHaveURL(/\/dashboard\/products/);
+  await expect(page.getByRole("heading", { name: "Crear producto" })).toBeVisible();
+});
+
 test("sign out prevents dashboard access after reload", async ({ page }) => {
   await page.goto("/login");
   await authorizeWithLocalProvider(page);
