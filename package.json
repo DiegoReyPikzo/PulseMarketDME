@@ -35,7 +35,7 @@
     "e2e:reorder": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --reorder",
     "e2e:product-edit": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --product-edit",
     "e2e:customers": "node --conditions=react-server --import tsx scripts/e2e-auth-runner.ts --customers",
-    "test:production-tooling": "vitest run tests/production/environment.test.ts tests/production/migration-checks.test.ts tests/seed/unit.test.ts",
+    "test:production-tooling": "vitest run tests/production/environment.test.ts tests/production/migration-checks.test.ts tests/production/seed-v2.test.ts tests/seed/unit.test.ts",
     "prod:db": "node --import tsx scripts/production-with-env.ts"
   },
   "dependencies": {

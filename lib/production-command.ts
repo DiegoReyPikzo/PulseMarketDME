@@ -10,6 +10,11 @@ import {
   redactSecrets,
   type ProductionConfiguration,
 } from "./production-environment";
+import {
+  parseProductionSeedArguments,
+  PRODUCTION_SEED_USAGE,
+  ProductionSeedError,
+} from "./production-seed";
 
 export type ProductionInvocation = {
   command: string;
@@ -32,6 +37,7 @@ export const PRODUCTION_ACTIONS = [
   "verify-pre",
   "verify-post",
   "deploy",
+  "seed-v2",
 ] as const;
 
 export type ProductionAction = (typeof PRODUCTION_ACTIONS)[number];
@@ -39,14 +45,21 @@ export type ProductionAction = (typeof PRODUCTION_ACTIONS)[number];
 const USAGE = `Usage: npm run prod:db -- <${PRODUCTION_ACTIONS.join("|")}> [options]
   diff-main compares with the origin/main schema (no arguments)
   verify-pre|verify-post accept --expect-customers=N
-  deploy requires --confirm-endpoint=<verified endpoint ID>`;
+  deploy requires --confirm-endpoint=<verified endpoint ID>
+  ${PRODUCTION_SEED_USAGE}`;
 
 // Only these fixed command lines can run against production. Recovery
-// operations (migrate resolve, SQL DROP, restores) are intentionally absent.
+// operations (migrate resolve, SQL DROP, DELETE, restores) are intentionally
+// absent.
 export function resolveProductionAction(
   argv: readonly string[],
   configuration: ProductionConfiguration,
-  options: { nodePath?: string; verifyScript?: string; mainSchemaPath?: string } = {},
+  options: {
+    nodePath?: string;
+    verifyScript?: string;
+    mainSchemaPath?: string;
+    seedScript?: string;
+  } = {},
 ): ProductionInvocation | null {
   const [action, ...rest] = argv;
   if (!action || !(PRODUCTION_ACTIONS as readonly string[]).includes(action)) {
@@ -120,6 +133,25 @@ export function resolveProductionAction(
         );
       }
       return { ...prisma(["migrate", "deploy"]), description: "prisma migrate deploy" };
+    }
+    case "seed-v2": {
+      // The script parses and checks the same arguments again in the child.
+      const seedArguments = parseProductionSeedArguments(rest);
+      if (seedArguments.confirmEndpoint !== configuration.endpointId) {
+        throw new ProductionCommandError(
+          "seed-v2 requires --confirm-endpoint to match the approved production target.",
+        );
+      }
+      return {
+        command: options.nodePath ?? process.execPath,
+        args: [
+          "--import",
+          "tsx",
+          options.seedScript ?? resolve("scripts/production-seed-v2.ts"),
+          ...rest,
+        ],
+        description: "v2 sample-data load (insert-only, one serializable transaction)",
+      };
     }
   }
 }
@@ -215,7 +247,8 @@ export async function runProductionWrapper(
   } catch (error: unknown) {
     const message =
       error instanceof ProductionConfigurationError ||
-      error instanceof ProductionCommandError
+      error instanceof ProductionCommandError ||
+      error instanceof ProductionSeedError
         ? error.message
         : "Production tooling failed. Details were suppressed.";
     dependencies.error(redactSecrets(message, configuration));
